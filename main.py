@@ -13,26 +13,23 @@ from sqlalchemy.orm import declarative_base
 
 from aiogram import Bot, Dispatcher
 
-# ---------------- LOGGING ----------------
+# ---------------- LOG ----------------
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("app")
-
 log.info("MAIN STARTED")
 
 # ---------------- BOT ----------------
-TOKEN = os.getenv("BOT_TOKEN")  # Railway variable
-bot = Bot(token=TOKEN)
+TOKEN = os.getenv("BOT_TOKEN")
+bot = Bot(token=TOKEN) if TOKEN else None
 dp = Dispatcher()
 
-
-# ---------------- DATABASE ----------------
+# ---------------- DB ----------------
 DATABASE_URL = "sqlite+aiosqlite:///./data.db"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 Base = declarative_base()
-
 
 # ---------------- MODELS ----------------
 class User(Base):
@@ -56,7 +53,6 @@ class Report(Base):
     sell_price = Column(Float, default=0)
 
     profit = Column(Float, default=0)
-
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -66,7 +62,8 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    asyncio.create_task(run_bot())
+    if bot:
+        asyncio.create_task(run_bot())
 
     yield
 
@@ -74,53 +71,62 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# ---------------- STATIC (Mini App) ----------------
+# ---------------- STATIC MINI APP ----------------
 if not os.path.exists("static"):
     os.makedirs("static")
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
-# ---------------- BOT RUNNER ----------------
+# ---------------- BOT ----------------
 async def run_bot():
     log.info("BOT STARTED")
-    await dp.start_polling(bot)
+    if bot:
+        await dp.start_polling(bot)
 
 
-# ---------------- CREATE REPORT ----------------
+# ---------------- SAFE REPORT (НЕ ПАДАЕТ) ----------------
 @app.post("/report")
 async def create_report(data: dict):
-    async with SessionLocal() as s:
+    try:
+        async with SessionLocal() as s:
 
-        purchase = float(data.get("purchase_price", 0))
-        repair = float(data.get("repair_cost", 0))
-        sell = float(data.get("sell_price", 0))
+            purchase = float(data.get("purchase_price") or 0)
+            repair = float(data.get("repair_cost") or 0)
+            sell = float(data.get("sell_price") or 0)
 
-        if data["type"] == "sale":
-            profit = sell - purchase - repair
-        else:
-            profit = sell - repair
+            if data.get("type") == "sale":
+                profit = sell - purchase - repair
+            else:
+                profit = sell - repair
 
-        r = Report(
-            type=data["type"],
-            model=data["model"],
-            purchase_price=purchase,
-            repair_cost=repair,
-            sell_price=sell,
-            profit=profit
-        )
+            r = Report(
+                type=data.get("type"),
+                model=data.get("model"),
+                purchase_price=purchase,
+                repair_cost=repair,
+                sell_price=sell,
+                profit=profit
+            )
 
-        s.add(r)
-        await s.commit()
+            s.add(r)
+            await s.commit()
 
-        return {"ok": True, "profit": profit}
+            return {
+                "ok": True,
+                "profit": profit,
+                "net_profit": profit
+            }
+
+    except Exception as e:
+        log.exception(e)
+        return {"ok": False, "error": str(e)}
 
 
-# ---------------- GET REPORTS (FILTER) ----------------
+# ---------------- REPORTS WITH FILTER ----------------
 @app.get("/reports")
 async def get_reports(days: int = 7):
     async with SessionLocal() as s:
-
         since = datetime.utcnow() - timedelta(days=days)
 
         res = await s.execute(
@@ -144,6 +150,24 @@ async def analytics():
         }
 
 
+# ---------------- DAY/WEEK ANALYTICS ----------------
+@app.get("/analytics/time")
+async def analytics_time():
+    async with SessionLocal() as s:
+
+        res = await s.execute(select(Report))
+        reports = res.scalars().all()
+
+        now = datetime.utcnow()
+        day = now - timedelta(days=1)
+        week = now - timedelta(days=7)
+
+        return {
+            "day_profit": sum(r.profit for r in reports if r.created_at >= day),
+            "week_profit": sum(r.profit for r in reports if r.created_at >= week)
+        }
+
+
 # ---------------- TOP MODELS ----------------
 @app.get("/top-models")
 async def top_models():
@@ -159,7 +183,7 @@ async def top_models():
         return res.all()
 
 
-# ---------------- CHART DATA ----------------
+# ---------------- CHART DATA (Chart.js) ----------------
 @app.get("/chart")
 async def chart():
     async with SessionLocal() as s:
@@ -176,7 +200,7 @@ async def chart():
         return data
 
 
-# ---------------- USER ROLE ----------------
+# ---------------- USERS + ROLES ----------------
 @app.get("/user/{telegram_id}")
 async def get_user(telegram_id: str):
     async with SessionLocal() as s:
@@ -186,7 +210,13 @@ async def get_user(telegram_id: str):
         return res.scalar_one_or_none()
 
 
-# ---------------- START ----------------
+# ---------------- HEALTH CHECK ----------------
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# ---------------- SAFE START ----------------
 if __name__ == "__main__":
     import uvicorn
 
