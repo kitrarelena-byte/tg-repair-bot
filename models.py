@@ -4,7 +4,7 @@ from database import Base
 
 
 class User(Base):
-    tablename = "users"
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True)
@@ -12,7 +12,7 @@ class User(Base):
 
 
 class Report(Base):
-    tablename = "reports"
+    __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True)
     model = Column(String)
@@ -24,7 +24,7 @@ class Report(Base):
 
 
 class Part(Base):
-    tablename = "parts"
+    __tablename__ = "parts"
 
     id = Column(Integer, primary_key=True)
     name = Column(String)
