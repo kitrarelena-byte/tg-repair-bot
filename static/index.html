@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta charset="UTF-8">
-
 <meta name="viewport"
 content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
@@ -16,11 +15,10 @@ body {
     font-family: Arial;
     background: #0f172a;
     color: white;
+    overflow-x: hidden;
 }
 
-.container {
-    padding: 15px;
-}
+.container { padding: 15px; }
 
 .tabbar {
     display: flex;
@@ -29,13 +27,9 @@ body {
     padding: 10px;
 }
 
-.tab {
-    cursor: pointer;
-}
+.tab { cursor: pointer; }
 
-.hidden {
-    display: none;
-}
+.hidden { display: none; }
 
 .card {
     background: #1e293b;
@@ -62,9 +56,7 @@ button {
     font-weight: bold;
 }
 
-small {
-    opacity: 0.7;
-}
+small { opacity: 0.7; }
 </style>
 </head>
 
@@ -74,7 +66,8 @@ small {
     <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
     <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
     <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
+    <div class="tab" onclick="showTab('analytics')">📈 Аналитика</div>
+    <div class="tab" onclick="loadAdmin()">👤 Админ</div>
 </div>
 
 <div class="container">
@@ -82,57 +75,52 @@ small {
 <!-- SALE -->
 <div id="sale" class="card">
     <h3>Продажа</h3>
-
     <input id="sale_model" placeholder="Модель">
-
     <input id="sale_purchase" placeholder="Цена покупки">
-
     <input id="sale_repair" placeholder="Цена ремонта">
-
     <input id="sale_sell" placeholder="Цена продажи">
-
     <button onclick="sendSale()">Сохранить</button>
-
     <small id="sale_profit"></small>
 </div>
 
 <!-- REPAIR -->
 <div id="repair" class="card hidden">
     <h3>Ремонт</h3>
-
     <input id="repair_model" placeholder="Модель">
-
     <select id="parts_select" multiple></select>
-
     <input id="repair_price" placeholder="Цена ремонта">
-
     <button onclick="sendRepair()">Сохранить</button>
 </div>
 
 <!-- PARTS -->
 <div id="parts" class="card hidden">
     <h3>Запчасти</h3>
-
     <input id="part_name" placeholder="Название">
     <input id="part_price" placeholder="Цена">
-
     <button onclick="addPart()">Добавить</button>
-
     <ul id="parts_list"></ul>
 </div>
 
 <!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
+<!-- ADMIN -->
+<div id="admin" class="card hidden"></div>
+
 </div>
 
 <script>
 const tg = window.Telegram.WebApp;
+tg.ready();
 tg.expand();
 
-const API = ""; // Railway URL сюда НЕ надо — используем relative
+const API = "";
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+
+function safeUserId() {
+    return tg?.initDataUnsafe?.user?.id || "0";
+}
 
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
@@ -146,7 +134,6 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p, i) => {
-
         const li = document.createElement("li");
         li.innerText = ${p.name} - ${p.price};
 
@@ -158,11 +145,10 @@ function renderParts() {
 
         list.appendChild(li);
 
-        const option = document.createElement("option");
-        option.value = JSON.stringify(p);
-        option.text = p.name;
-
-        select.appendChild(option);
+        const opt = document.createElement("option");
+        opt.value = JSON.stringify(p);
+        opt.text = p.name;
+        select.appendChild(opt);
     });
 }
 
@@ -176,14 +162,13 @@ function addPart() {
 }
 
 async function sendSale() {
-
     const data = {
-        telegram_id: tg.initDataUnsafe?.user?.id || "0",
+        telegram_id: safeUserId(),
         type: "sale",
-        model: document.getElementById("sale_model").value,
-        purchase_price: Number(document.getElementById("sale_purchase").value),
-        repair_cost: Number(document.getElementById("sale_repair").value),
-        sell_price: Number(document.getElementById("sale_sell").value)
+        model: sale_model.value,
+        purchase_price: Number(sale_purchase.value),
+        repair_cost: Number(sale_repair.value),
+        sell_price: Number(sale_sell.value)
     };
 
     const res = await fetch("/report", {
@@ -192,57 +177,61 @@ async function sendSale() {
         body: JSON.stringify(data)
     });
 
-    const result = await res.json();
-
-    document.getElementById("sale_profit").innerText =
-        "💰 Profit: " + result.profit;
+    const r = await res.json();
+    sale_profit.innerText = "💰 Profit: " + r.profit;
 }
 
 async function sendRepair() {
-
-    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
-        .map(o => JSON.parse(o.value));
-
-    const totalParts = selected.reduce((s,p)=>s+Number(p.price),0);
-
-    const data = {
-        telegram_id: tg.initDataUnsafe?.user?.id || "0",
-        type: "repair",
-        model: document.getElementById("repair_model").value,
-        purchase_price: 0,
-        repair_cost: Number(document.getElementById("repair_price").value) + totalParts,
-        sell_price: 0
-    };
+    const selected = [...parts_select.selectedOptions].map(o => JSON.parse(o.value));
+    const partsSum = selected.reduce((s,p)=>s+Number(p.price),0);
 
     await fetch("/report", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+            telegram_id: safeUserId(),
+            type: "repair",
+            model: repair_model.value,
+            purchase_price: 0,
+            repair_cost: Number(repair_price.value) + partsSum,
+            sell_price: 0
+        })
     });
 
-    alert("Saved repair");
+    alert("Ремонт сохранён");
 }
 
 async function loadAnalytics() {
-
     showTab("analytics");
 
-    const res = await fetch("/analytics");
-    const data = await res.json();
+    const r = await fetch("/analytics");
+    const d = await r.json();
 
-    document.getElementById("analytics").innerHTML = `
+    analytics.innerHTML = `
         <h3>📈 Аналитика</h3>
-        <p>Общая прибыль: ${data.total_profit}</p>
-        <p>Продаж: ${data.sales_count}</p>
-        <p>Ремонтов: ${data.repair_count}</p>
+        <p>Прибыль: ${d.total_profit}</p>
+        <p>Продаж: ${d.sales_count}</p>
+        <p>Ремонтов: ${d.repair_count}</p>
+    `;
+}
+
+async function loadAdmin() {
+    showTab("admin");
+
+    const r = await fetch("/admin");
+    const d = await r.json();
+
+    admin.innerHTML = `
+        <h3>👤 Админ</h3>
+        <p>Users: ${Object.keys(d.users).length}</p>
+        <p>Reports: ${d.reports.length}</p>
     `;
 }
 
 function showTab(tab) {
-    ["sale","repair","parts","analytics"].forEach(id=>{
+    ["sale","repair","parts","analytics","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
-
     document.getElementById(tab).classList.remove("hidden");
 }
 
