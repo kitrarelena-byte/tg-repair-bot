@@ -4,3 +4,4 @@ aiogram
 sqlalchemy
 aiosqlite
 pydantic
+sqlalchemy==2.0.25
