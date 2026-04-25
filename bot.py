@@ -1,29 +1,76 @@
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import WebAppInfo
-from aiogram.filters import CommandStart
 import asyncio
+import logging
 
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart
+
+# -----------------------
+# LOGGING (очень важно)
+# -----------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+# -----------------------
+# TOKEN SAFETY CHECK
+# -----------------------
 TOKEN = os.getenv("BOT_TOKEN")
-print("ENV BOT TOKEN =", os.getenv("BOT_TOKEN"))
+
+if not TOKEN:
+    raise RuntimeError(
+        "❌ BOT_TOKEN is missing in environment variables (Railway Variables)"
+    )
+
+# -----------------------
+# BOT INIT
+# -----------------------
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 
+# -----------------------
+# /START HANDLER
+# -----------------------
 @dp.message(CommandStart())
-async def start(msg: types.Message):
-    kb = types.ReplyKeyboardMarkup(
-        keyboard=[
-            [types.KeyboardButton(
-                text="📊 Открыть приложение",
-                web_app=WebAppInfo(url=os.getenv("WEBAPP_URL"))
-            )]
-        ],
-        resize_keyboard=True
+async def start(message: types.Message):
+    await message.answer(
+        "🚀 Бот запущен и работает!\n\n"
+        "Выберите действие в Mini App."
     )
 
-    await msg.answer("Открой мини-приложение:", reply_markup=kb)
+
+# -----------------------
+# OPTIONAL: LOG ALL MESSAGES
+# -----------------------
+@dp.message()
+async def echo(message: types.Message):
+    logging.info(f"Message from {message.from_user.id}: {message.text}")
 
 
+# -----------------------
+# BOT RUNNER (SAFE)
+# -----------------------
 async def run_bot():
-    await dp.start_polling(bot)
+    logging.info("🤖 Bot is starting polling...")
+
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logging.info("🧹 Webhook cleared (if existed)")
+
+        await dp.start_polling(bot)
+
+    except Exception as e:
+        logging.exception(f"💥 Bot crashed: {e}")
+
+    finally:
+        await bot.session.close()
+        logging.info("🛑 Bot stopped cleanly")
+
+
+# -----------------------
+# LOCAL TEST (optional)
+# -----------------------
+if __name__ == "__main__":
+    asyncio.run(run_bot())
