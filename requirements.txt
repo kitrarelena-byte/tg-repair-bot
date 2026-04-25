@@ -1,7 +1,6 @@
 fastapi
 uvicorn
-aiogram
-sqlalchemy
+aiogram==3.4.1
 aiosqlite
 pydantic
 sqlalchemy==2.0.25
