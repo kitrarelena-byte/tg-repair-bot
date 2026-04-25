@@ -8,77 +8,50 @@ from fastapi.staticfiles import StaticFiles
 
 from bot import run_bot
 
-
-# ---------------- LOGGING ----------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-
+# ---------- LOG ----------
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logger.info("🚀 MAIN FILE LOADED")
+logger.info("🚀 MAIN STARTED")
 
-
-# ---------------- BOT SAFE START ----------------
-async def safe_bot_start():
+# ---------- BOT SAFE START ----------
+async def safe_bot():
     try:
-        logger.info("🤖 BOT STARTING...")
+        logger.info("🤖 BOT START...")
         await run_bot()
     except Exception as e:
-        logger.exception(f"💥 BOT CRASH: {e}")
+        logger.exception(f"BOT ERROR: {e}")
 
-
-# ---------------- LIFESPAN ----------------
+# ---------- LIFESPAN ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🔥 FASTAPI STARTUP BEGIN")
+    logger.info("🔥 STARTUP")
 
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(safe_bot_start())
-        logger.info("✅ BOT TASK CREATED")
-    except Exception as e:
-        logger.exception(f"💥 ERROR STARTING BOT TASK: {e}")
+    loop = asyncio.get_event_loop()
+    loop.create_task(safe_bot())
 
-    logger.info("🔥 FASTAPI STARTUP END")
     yield
 
-    logger.info("🛑 FASTAPI SHUTDOWN")
+    logger.info("🛑 SHUTDOWN")
 
-
-# ---------------- APP ----------------
+# ---------- APP ----------
 app = FastAPI(lifespan=lifespan)
 
+# ---------- STATIC ----------
+if not os.path.exists("static"):
+    os.makedirs("static")
 
-# ---------------- STATIC ----------------
-STATIC_DIR = "static"
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-if not os.path.exists(STATIC_DIR):
-    logger.warning("⚠️ static folder NOT FOUND, creating...")
-    os.makedirs(STATIC_DIR, exist_ok=True)
-
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
-
-
-# ---------------- HEALTHCHECK ----------------
+# ---------- HEALTH ----------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-
-logger.info("✅ APP INITIALIZED")
+# ---------- LOCAL RUN ----------
 if __name__ == "__main__":
     import uvicorn
-    import os
 
     port = int(os.getenv("PORT", 8000))
 
-    print(f"🚀 STARTING UVICORN ON PORT {port}")
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

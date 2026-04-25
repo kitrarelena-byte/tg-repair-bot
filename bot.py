@@ -1,36 +1,67 @@
 import os
+import json
 import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("BOT_TOKEN")
+WEBAPP_URL = os.getenv("WEBAPP_URL")
 
 if not TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing")
+    raise RuntimeError("BOT_TOKEN not set")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-
+# ---------- START ----------
 @dp.message(CommandStart())
 async def start(message: types.Message):
-    await message.answer("🚀 Бот работает!")
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(
+                    text="📱 Открыть приложение",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )
+            ]
+        ],
+        resize_keyboard=True
+    )
 
+    await message.answer(
+        "🚀 Открой мини приложение:",
+        reply_markup=kb
+    )
 
-async def run_bot():
-    print("🤖 RUN_BOT ENTERED")
+# ---------- MINI APP DATA ----------
+@dp.message(lambda message: message.web_app_data is not None)
+async def webapp_handler(message: types.Message):
+    data = json.loads(message.web_app_data.data)
+
+    model = data.get("model")
+    repair = data.get("repair")
+    sell = data.get("sell")
 
     try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        print("🧹 WEBHOOK CLEARED")
+        profit = int(sell) - int(repair)
+    except:
+        profit = "ошибка"
 
-        await dp.start_polling(bot)
+    await message.answer(
+        f"📊 Отчет:\n\n"
+        f"📱 Модель: {model}\n"
+        f"🔧 Ремонт: {repair}\n"
+        f"💰 Продажа: {sell}\n"
+        f"📈 Чистыми: {profit}"
+    )
 
-    except Exception as e:
-        print("💥 POLLING ERROR:", e)
+# ---------- RUN ----------
+async def run_bot():
+    print("🤖 BOT POLLING START")
 
-    finally:
-        await bot.session.close()
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)

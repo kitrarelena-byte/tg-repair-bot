@@ -1,33 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Repair App</title>
+    <meta charset="UTF-8">
+    <title>Repair CRM</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
     <style>
-        body { font-family: Arial; background:#0f172a; color:white; padding:20px; }
-        .card { background:#1e293b; padding:15px; margin:10px 0; border-radius:10px; }
-        input, button { padding:10px; margin:5px; border-radius:8px; }
-        button { background:#38bdf8; border:none; cursor:pointer; }
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+        }
+
+        .container {
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 8px;
+            border: none;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 12px;
+            width: 100%;
+            border-radius: 10px;
+            border: none;
+            background: #22c55e;
+            color: black;
+            font-weight: bold;
+        }
     </style>
 </head>
+
 <body>
+<div class="container">
 
-<h2>📱 Repair Dashboard</h2>
+    <h1>📱 Repair CRM</h1>
 
-<div class="card">
-    <h3>Добавить отчёт</h3>
-    <input id="model" placeholder="Модель">
-    <input id="repair" placeholder="Ремонт">
-    <input id="sell" placeholder="Продажа">
-    <button onclick="addReport()">Сохранить</button>
+    <div class="card">
+        <h3>Новый отчет</h3>
+
+        <input id="model" placeholder="Модель телефона">
+        <input id="repair" placeholder="Цена ремонта">
+        <input id="sell" placeholder="Цена продажи">
+
+        <button onclick="sendData()">Сохранить</button>
+    </div>
+
 </div>
 
-<div class="card">
-    <h3>Добавить запчасть</h3>
-    <input id="partName" placeholder="Название">
-    <input id="partPrice" placeholder="Цена">
-    <button onclick="addPart()">Добавить</button>
-</div>
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
 
-<script src="app.js"></script>
+    function sendData() {
+        const data = {
+            model: document.getElementById("model").value,
+            repair: document.getElementById("repair").value,
+            sell: document.getElementById("sell").value
+        };
+
+        tg.sendData(JSON.stringify(data));
+    }
+</script>
+
 </body>
 </html>
