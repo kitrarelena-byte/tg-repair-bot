@@ -8,16 +8,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, select
-from sqlalchemy.orm import declarative_base, sessionmaker
-
 from bot import run_bot
 
 # ---------- LOG ----------
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("main")
 
 logger.info("🚀 MAIN STARTED")
+
 
 # ---------- BOT SAFE START ----------
 async def safe_bot():
@@ -27,173 +25,146 @@ async def safe_bot():
     except Exception as e:
         logger.exception(f"BOT ERROR: {e}")
 
-# ---------- DB ----------
-DATABASE_URL = "sqlite:///./app.db"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+# ---------- MEMORY STORAGE ----------
+USERS = {}
+REPORTS = []
 
-Base = declarative_base()
 
 # ---------- MODELS ----------
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True)
-    telegram_id = Column(String, unique=True)
-    role = Column(String, default="user")
-
-class Report(Base):
-    __tablename__ = "reports"
-
-    id = Column(Integer, primary_key=True)
-    telegram_id = Column(String)
-
-    type = Column(String)
-    model = Column(String)
-
-    purchase_price = Column(Float)
-    repair_cost = Column(Float)
-    sell_price = Column(Float)
-    profit = Column(Float)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-Base.metadata.create_all(bind=engine)
-
-# ---------- FASTAPI ----------
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("🔥 STARTUP")
-    asyncio.create_task(safe_bot())
-    yield
-    logger.info("🛑 SHUTDOWN")
-
-app = FastAPI(lifespan=lifespan)
-
-# ---------- STATIC ----------
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
-# ---------- SCHEMAS ----------
 class ReportIn(BaseModel):
     telegram_id: str
-    type: str
+    type: str  # sale / repair
     model: str
     purchase_price: float = 0
     repair_cost: float = 0
     sell_price: float = 0
 
-class RegisterIn(BaseModel):
-    telegram_id: str
 
-# ---------- REGISTER ----------
+# ---------- FASTAPI LIFESPAN ----------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("🔥 STARTUP")
+
+    asyncio.create_task(safe_bot())
+
+    yield
+
+    logger.info("🛑 SHUTDOWN")
+
+
+# ---------- APP ----------
+app = FastAPI(lifespan=lifespan)
+
+
+# ---------- STATIC MINI APP ----------
+STATIC_DIR = "static"
+if not os.path.exists(STATIC_DIR):
+    os.makedirs(STATIC_DIR)
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
+# ---------- REGISTER USER ----------
 @app.post("/register")
-def register(data: RegisterIn):
-    db = SessionLocal()
+async def register(data: dict):
+    tg_id = str(data.get("telegram_id"))
 
-    user = db.query(User).filter(User.telegram_id == data.telegram_id).first()
+    if tg_id not in USERS:
+        USERS[tg_id] = {
+            "role": "admin" if len(USERS) == 0 else "user"
+        }
 
-    if not user:
-        role = "admin" if db.query(User).count() == 0 else "user"
+    return USERS[tg_id]
 
-        user = User(
-            telegram_id=data.telegram_id,
-            role=role
-        )
-        db.add(user)
-        db.commit()
 
-    db.close()
-
-    return {"role": user.role}
-
-# ---------- REPORT ----------
+# ---------- CREATE REPORT ----------
 @app.post("/report")
-def create_report(data: ReportIn):
-    db = SessionLocal()
+async def create_report(data: ReportIn):
+    profit = float(data.sell_price) - float(data.purchase_price) - float(data.repair_cost)
 
-    profit = data.sell_price - data.purchase_price - data.repair_cost
+    report = {
+        "id": len(REPORTS) + 1,
+        "telegram_id": data.telegram_id,
+        "type": data.type,
+        "model": data.model,
+        "purchase_price": data.purchase_price,
+        "repair_cost": data.repair_cost,
+        "sell_price": data.sell_price,
+        "profit": profit,
+        "created_at": datetime.utcnow().isoformat()
+    }
 
-    report = Report(
-        telegram_id=data.telegram_id,
-        type=data.type,
-        model=data.model,
-        purchase_price=data.purchase_price,
-        repair_cost=data.repair_cost,
-        sell_price=data.sell_price,
-        profit=profit
-    )
+    REPORTS.append(report)
 
-    db.add(report)
-    db.commit()
-    db.close()
+    logger.info(f"NEW REPORT: {report}")
 
     return {"ok": True, "profit": profit}
 
+
 # ---------- ANALYTICS ----------
 @app.get("/analytics")
-def analytics():
-    db = SessionLocal()
+async def analytics():
+    total_profit = sum(r["profit"] for r in REPORTS)
 
-    reports = db.query(Report).all()
-
-    total = sum(r.profit for r in reports)
-    sales = len([r for r in reports if r.type == "sale"])
-    repairs = len([r for r in reports if r.type == "repair"])
-
-    db.close()
+    sales = len([r for r in REPORTS if r["type"] == "sale"])
+    repairs = len([r for r in REPORTS if r["type"] == "repair"])
 
     return {
-        "total_profit": total,
+        "total_profit": total_profit,
         "sales_count": sales,
         "repair_count": repairs
     }
 
-# ---------- ADMIN ----------
-@app.get("/admin/{telegram_id}")
-def admin(telegram_id: str):
-    db = SessionLocal()
 
-    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+# ---------- REPORTS FILTER ----------
+@app.get("/reports")
+async def get_reports(days: int = 7):
+    since = datetime.utcnow() - timedelta(days=days)
 
-    if not user or user.role != "admin":
-        return {"error": "no access"}
+    filtered = [
+        r for r in REPORTS
+        if datetime.fromisoformat(r["created_at"]) >= since
+    ]
 
-    users = db.query(User).all()
-    reports = db.query(Report).all()
+    return filtered
 
-    db.close()
 
+# ---------- TOP MODELS ----------
+@app.get("/top")
+async def top_models():
+    stats = {}
+
+    for r in REPORTS:
+        stats[r["model"]] = stats.get(r["model"], 0) + r["profit"]
+
+    return sorted(stats.items(), key=lambda x: x[1], reverse=True)
+
+
+# ---------- ADMIN PANEL ----------
+@app.get("/admin")
+async def admin():
     return {
-        "users": len(users),
-        "reports": len(reports)
+        "users": USERS,
+        "reports": REPORTS
     }
 
-# ---------- REPORT FILTER ----------
-@app.get("/reports")
-def get_reports():
-    db = SessionLocal()
 
-    reports = db.query(Report).all()
-
-    db.close()
-
-    return reports
-
-# ---------- HEALTH ----------
+# ---------- HEALTH CHECK ----------
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
 
-# ---------- RUN ----------
-if __name__ == "__main__":
+
+# ---------- RUN SERVER ----------
+if name == "__main__":
     import uvicorn
+
+    port = int(os.getenv("PORT", 8000))
 
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000))
+        port=port,
+        reload=False
     )
