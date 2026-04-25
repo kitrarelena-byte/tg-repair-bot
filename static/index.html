@@ -61,6 +61,10 @@ button {
     background: #22c55e;
     font-weight: bold;
 }
+
+small {
+    opacity: 0.7;
+}
 </style>
 </head>
 
@@ -70,6 +74,7 @@ button {
     <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
     <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
     <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
 </div>
 
 <div class="container">
@@ -77,38 +82,55 @@ button {
 <!-- SALE -->
 <div id="sale" class="card">
     <h3>Продажа</h3>
+
     <input id="sale_model" placeholder="Модель">
+
+    <input id="sale_purchase" placeholder="Цена покупки">
+
     <input id="sale_repair" placeholder="Цена ремонта">
+
     <input id="sale_sell" placeholder="Цена продажи">
+
     <button onclick="sendSale()">Сохранить</button>
+
+    <small id="sale_profit"></small>
 </div>
 
 <!-- REPAIR -->
 <div id="repair" class="card hidden">
     <h3>Ремонт</h3>
+
     <input id="repair_model" placeholder="Модель">
 
     <select id="parts_select" multiple></select>
 
     <input id="repair_price" placeholder="Цена ремонта">
+
     <button onclick="sendRepair()">Сохранить</button>
 </div>
 
 <!-- PARTS -->
 <div id="parts" class="card hidden">
     <h3>Запчасти</h3>
+
     <input id="part_name" placeholder="Название">
     <input id="part_price" placeholder="Цена">
+
     <button onclick="addPart()">Добавить</button>
 
     <ul id="parts_list"></ul>
 </div>
+
+<!-- ANALYTICS -->
+<div id="analytics" class="card hidden"></div>
 
 </div>
 
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand();
+
+const API = ""; // Railway URL сюда НЕ надо — используем relative
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
@@ -124,8 +146,9 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p, i) => {
+
         const li = document.createElement("li");
-        li.innerText = p.name + " - " + p.price;
+        li.innerText = ${p.name} - ${p.price};
 
         li.onclick = () => {
             parts.splice(i,1);
@@ -136,7 +159,7 @@ function renderParts() {
         list.appendChild(li);
 
         const option = document.createElement("option");
-        option.value = p.name;
+        option.value = JSON.stringify(p);
         option.text = p.name;
 
         select.appendChild(option);
@@ -152,34 +175,71 @@ function addPart() {
     renderParts();
 }
 
-function sendSale() {
+async function sendSale() {
+
     const data = {
+        telegram_id: tg.initDataUnsafe?.user?.id || "0",
         type: "sale",
         model: document.getElementById("sale_model").value,
-        repair: document.getElementById("sale_repair").value,
-        sell: document.getElementById("sale_sell").value
+        purchase_price: Number(document.getElementById("sale_purchase").value),
+        repair_cost: Number(document.getElementById("sale_repair").value),
+        sell_price: Number(document.getElementById("sale_sell").value)
     };
 
-    tg.sendData(JSON.stringify(data));
+    const res = await fetch("/report", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    document.getElementById("sale_profit").innerText =
+        "💰 Profit: " + result.profit;
 }
 
-function sendRepair() {
-    const select = document.getElementById("parts_select");
+async function sendRepair() {
 
-    const selected = Array.from(select.selectedOptions).map(o => o.value);
+    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
+        .map(o => JSON.parse(o.value));
+
+    const totalParts = selected.reduce((s,p)=>s+Number(p.price),0);
 
     const data = {
+        telegram_id: tg.initDataUnsafe?.user?.id || "0",
         type: "repair",
         model: document.getElementById("repair_model").value,
-        parts: selected,
-        price: document.getElementById("repair_price").value
+        purchase_price: 0,
+        repair_cost: Number(document.getElementById("repair_price").value) + totalParts,
+        sell_price: 0
     };
 
-    tg.sendData(JSON.stringify(data));
+    await fetch("/report", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(data)
+    });
+
+    alert("Saved repair");
+}
+
+async function loadAnalytics() {
+
+    showTab("analytics");
+
+    const res = await fetch("/analytics");
+    const data = await res.json();
+
+    document.getElementById("analytics").innerHTML = `
+        <h3>📈 Аналитика</h3>
+        <p>Общая прибыль: ${data.total_profit}</p>
+        <p>Продаж: ${data.sales_count}</p>
+        <p>Ремонтов: ${data.repair_count}</p>
+    `;
 }
 
 function showTab(tab) {
-    ["sale","repair","parts"].forEach(id => {
+    ["sale","repair","parts","analytics"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
 
