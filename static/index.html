@@ -2,8 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>CRM</title>
 
@@ -15,7 +14,6 @@ body {
     font-family: Arial;
     background: #0f172a;
     color: white;
-    overflow-x: hidden;
 }
 
 .container { padding: 15px; }
@@ -55,8 +53,6 @@ button {
     background: #22c55e;
     font-weight: bold;
 }
-
-small { opacity: 0.7; }
 </style>
 </head>
 
@@ -111,8 +107,6 @@ if (tg) {
     tg.expand();
 }
 
-const API = "";
-
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function safeUserId() {
@@ -130,13 +124,14 @@ function renderParts() {
     list.innerHTML = "";
     select.innerHTML = "";
 
-    parts.forEach((p, i) => {
+    for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
 
         const li = document.createElement("li");
-        li.innerText = ${p.name} - ${p.price};
+        li.innerText = p.name + " - " + p.price;
 
-        li.onclick = () => {
-            parts.splice(i,1);
+        li.onclick = function () {
+            parts.splice(i, 1);
             saveParts();
             renderParts();
         };
@@ -146,16 +141,15 @@ function renderParts() {
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
-
         select.appendChild(opt);
-    });
+    }
 }
 
 function addPart() {
     const name = document.getElementById("part_name").value;
     const price = document.getElementById("part_price").value;
 
-    parts.push({name, price});
+    parts.push({ name: name, price: price });
     saveParts();
     renderParts();
 }
@@ -177,14 +171,17 @@ async function sendSale() {
     });
 
     const r = await res.json();
-    document.getElementById("sale_profit").innerText = "💰 Profit: " + r.profit;
+    document.getElementById("sale_profit").innerText = "Profit: " + r.profit;
 }
 
 async function sendRepair() {
-    const selected = [...document.getElementById("parts_select").selectedOptions]
+    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
         .map(o => JSON.parse(o.value));
 
-    const partsSum = selected.reduce((s,p)=>s+Number(p.price),0);
+    let partsSum = 0;
+    for (let i = 0; i < selected.length; i++) {
+        partsSum += Number(selected[i].price);
+    }
 
     await fetch("/report", {
         method: "POST",
@@ -199,7 +196,17 @@ async function sendRepair() {
         })
     });
 
-    alert("Ремонт сохранён");
+    alert("Saved repair");
+}
+
+function showTab(tab) {
+    const ids = ["sale","repair","parts","analytics","admin"];
+
+    for (let i = 0; i < ids.length; i++) {
+        document.getElementById(ids[i]).classList.add("hidden");
+    }
+
+    document.getElementById(tab).classList.remove("hidden");
 }
 
 async function loadAnalytics() {
@@ -208,12 +215,11 @@ async function loadAnalytics() {
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    document.getElementById("analytics").innerHTML = `
-        <h3>📈 Аналитика</h3>
-        <p>Прибыль: ${d.total_profit}</p>
-        <p>Продаж: ${d.sales_count}</p>
-        <p>Ремонтов: ${d.repair_count}</p>
-    `;
+    document.getElementById("analytics").innerHTML =
+        "<h3>Analytics</h3>" +
+        "<p>Total: " + d.total_profit + "</p>" +
+        "<p>Sales: " + d.sales_count + "</p>" +
+        "<p>Repairs: " + d.repair_count + "</p>";
 }
 
 async function loadAdmin() {
@@ -222,19 +228,10 @@ async function loadAdmin() {
     const r = await fetch("/admin");
     const d = await r.json();
 
-    document.getElementById("admin").innerHTML = `
-        <h3>👤 Админ</h3>
-        <p>Users: ${Object.keys(d.users).length}</p>
-        <p>Reports: ${d.reports.length}</p>
-    `;
-}
-
-function showTab(tab) {
-    ["sale","repair","parts","analytics","admin"].forEach(id=>{
-        document.getElementById(id).classList.add("hidden");
-    });
-
-    document.getElementById(tab).classList.remove("hidden");
+    document.getElementById("admin").innerHTML =
+        "<h3>Admin</h3>" +
+        "<p>Users: " + Object.keys(d.users).length + "</p>" +
+        "<p>Reports: " + d.reports.length + "</p>";
 }
 
 renderParts();
