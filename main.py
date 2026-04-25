@@ -157,7 +157,7 @@ async def health():
 
 
 # ---------- RUN SERVER ----------
-if name == "__main__":
+if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8000))
