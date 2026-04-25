@@ -1,28 +1,34 @@
-from sqlalchemy import String, Integer, Float, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
-from db import Base
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import Integer, String
+
+class Base(DeclarativeBase):
+    pass
+
 
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(unique=True)
-    role: Mapped[str] = mapped_column(String, default="user")
+    telegram_id: Mapped[int]
+    role: Mapped[str] = mapped_column(default="user")
 
 
 class Part(Base):
     __tablename__ = "parts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String)
-    price: Mapped[float] = mapped_column(Float)
+    name: Mapped[str]
+    price: Mapped[int]
 
 
 class Report(Base):
     __tablename__ = "reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    model: Mapped[str] = mapped_column(String)
-    repair_price: Mapped[float] = mapped_column(Float)
-    sell_price: Mapped[float] = mapped_column(Float)
-    profit: Mapped[float] = mapped_column(Float)
+    type: Mapped[str]
+    model: Mapped[str]
+    buy: Mapped[int]
+    repair: Mapped[int]
+    sell: Mapped[int]
+    profit: Mapped[int]
+    date: Mapped[str]

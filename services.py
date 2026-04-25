@@ -1,4 +1,4 @@
-from db import SessionLocal
+from database import SessionLocal
 from models import Report, User, Part
 
 def get_user(tg_id):
