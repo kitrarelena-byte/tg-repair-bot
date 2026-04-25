@@ -56,7 +56,9 @@ def create_part(p: PartIn):
 async def startup():
     print("🔥 FASTAPI STARTED")
     import asyncio
+   
     asyncio.create_task(run_bot())
+    print("BOT TASK CREATED")
 
 
 # -------------------
