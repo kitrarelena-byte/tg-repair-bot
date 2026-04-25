@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta charset="UTF-8">
-
 <meta name="viewport"
 content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
@@ -58,11 +57,6 @@ button {
 }
 
 small { opacity: 0.7; }
-
-* {
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-}
 </style>
 </head>
 
@@ -78,7 +72,6 @@ small { opacity: 0.7; }
 
 <div class="container">
 
-<!-- SALE -->
 <div id="sale" class="card">
     <h3>Продажа</h3>
     <input id="sale_model" placeholder="Модель">
@@ -89,7 +82,6 @@ small { opacity: 0.7; }
     <small id="sale_profit"></small>
 </div>
 
-<!-- REPAIR -->
 <div id="repair" class="card hidden">
     <h3>Ремонт</h3>
     <input id="repair_model" placeholder="Модель">
@@ -98,7 +90,6 @@ small { opacity: 0.7; }
     <button onclick="sendRepair()">Сохранить</button>
 </div>
 
-<!-- PARTS -->
 <div id="parts" class="card hidden">
     <h3>Запчасти</h3>
     <input id="part_name" placeholder="Название">
@@ -107,25 +98,26 @@ small { opacity: 0.7; }
     <ul id="parts_list"></ul>
 </div>
 
-<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
-
-<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
 
 <script>
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+const tg = window.Telegram?.WebApp;
+
+if (tg) {
+    tg.ready();
+    tg.expand();
+}
+
+const API = "";
+
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
-
-// ---------- PARTS ----------
-let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
@@ -144,7 +136,7 @@ function renderParts() {
         li.innerText = ${p.name} - ${p.price};
 
         li.onclick = () => {
-            parts.splice(i, 1);
+            parts.splice(i,1);
             saveParts();
             renderParts();
         };
@@ -163,23 +155,19 @@ function addPart() {
     const name = document.getElementById("part_name").value;
     const price = document.getElementById("part_price").value;
 
-    if (!name || !price) return;
-
-    parts.push({ name, price });
+    parts.push({name, price});
     saveParts();
     renderParts();
 }
 
-// ---------- SALE ----------
 async function sendSale() {
-
     const data = {
         telegram_id: safeUserId(),
         type: "sale",
         model: document.getElementById("sale_model").value,
-        purchase_price: Number(document.getElementById("sale_purchase").value || 0),
-        repair_cost: Number(document.getElementById("sale_repair").value || 0),
-        sell_price: Number(document.getElementById("sale_sell").value || 0)
+        purchase_price: Number(document.getElementById("sale_purchase").value),
+        repair_cost: Number(document.getElementById("sale_repair").value),
+        sell_price: Number(document.getElementById("sale_sell").value)
     };
 
     const res = await fetch("/report", {
@@ -189,15 +177,11 @@ async function sendSale() {
     });
 
     const r = await res.json();
-
-    document.getElementById("sale_profit").innerText =
-        "💰 Profit: " + r.profit;
+    document.getElementById("sale_profit").innerText = "💰 Profit: " + r.profit;
 }
 
-// ---------- REPAIR ----------
 async function sendRepair() {
-
-    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
+    const selected = [...document.getElementById("parts_select").selectedOptions]
         .map(o => JSON.parse(o.value));
 
     const partsSum = selected.reduce((s,p)=>s+Number(p.price),0);
@@ -210,7 +194,7 @@ async function sendRepair() {
             type: "repair",
             model: document.getElementById("repair_model").value,
             purchase_price: 0,
-            repair_cost: Number(document.getElementById("repair_price").value || 0) + partsSum,
+            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
             sell_price: 0
         })
     });
@@ -218,9 +202,7 @@ async function sendRepair() {
     alert("Ремонт сохранён");
 }
 
-// ---------- ANALYTICS ----------
 async function loadAnalytics() {
-
     showTab("analytics");
 
     const r = await fetch("/analytics");
@@ -234,9 +216,7 @@ async function loadAnalytics() {
     `;
 }
 
-// ---------- ADMIN ----------
 async function loadAdmin() {
-
     showTab("admin");
 
     const r = await fetch("/admin");
@@ -249,9 +229,7 @@ async function loadAdmin() {
     `;
 }
 
-// ---------- TABS ----------
 function showTab(tab) {
-
     ["sale","repair","parts","analytics","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
@@ -259,7 +237,6 @@ function showTab(tab) {
     document.getElementById(tab).classList.remove("hidden");
 }
 
-// ---------- INIT ----------
 renderParts();
 </script>
 
