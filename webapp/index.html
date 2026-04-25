@@ -1,12 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Repair App</title>
+    <style>
+        body { font-family: Arial; background:#0f172a; color:white; padding:20px; }
+        .card { background:#1e293b; padding:15px; margin:10px 0; border-radius:10px; }
+        input, button { padding:10px; margin:5px; border-radius:8px; }
+        button { background:#38bdf8; border:none; cursor:pointer; }
+    </style>
 </head>
 <body>
 
-<h2>📊 Аналитика</h2>
-<canvas id="chart"></canvas>
+<h2>📱 Repair Dashboard</h2>
+
+<div class="card">
+    <h3>Добавить отчёт</h3>
+    <input id="model" placeholder="Модель">
+    <input id="repair" placeholder="Ремонт">
+    <input id="sell" placeholder="Продажа">
+    <button onclick="addReport()">Сохранить</button>
+</div>
+
+<div class="card">
+    <h3>Добавить запчасть</h3>
+    <input id="partName" placeholder="Название">
+    <input id="partPrice" placeholder="Цена">
+    <button onclick="addPart()">Добавить</button>
+</div>
 
 <script src="app.js"></script>
 </body>

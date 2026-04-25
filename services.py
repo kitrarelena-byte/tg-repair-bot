@@ -1,47 +1,51 @@
-from sqlalchemy import select, func
-from database import SessionLocal
-from models import Report, User
+from db import SessionLocal
+from models import Report, User, Part
 
-async def get_or_create_user(tg_id):
-    async with SessionLocal() as session:
-        res = await session.execute(select(User).where(User.telegram_id == tg_id))
-        user = res.scalar()
-
-        if not user:
-            user = User(telegram_id=tg_id)
-            session.add(user)
-            await session.commit()
-
-        return user
+def get_user(tg_id):
+    db = SessionLocal()
+    user = db.query(User).filter(User.telegram_id == tg_id).first()
+    if not user:
+        user = User(telegram_id=tg_id)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    db.close()
+    return user
 
 
-async def create_report(user_id, model, repair, sell):
-    async with SessionLocal() as session:
-        profit = sell - repair
-        r = Report(
-            model=model,
-            repair_price=repair,
-            sell_price=sell,
-            profit=profit,
-            user_id=user_id
-        )
-        session.add(r)
-        await session.commit()
-        return r
+def add_report(model, repair_price, sell_price):
+    db = SessionLocal()
+    profit = sell_price - repair_price
+
+    r = Report(
+        model=model,
+        repair_price=repair_price,
+        sell_price=sell_price,
+        profit=profit
+    )
+
+    db.add(r)
+    db.commit()
+    db.close()
 
 
-async def get_reports(user_id):
-    async with SessionLocal() as session:
-        res = await session.execute(
-            select(Report).where(Report.user_id == user_id)
-        )
-        return res.scalars().all()
+def get_reports():
+    db = SessionLocal()
+    data = db.query(Report).all()
+    db.close()
+    return data
 
 
-async def analytics(user_id):
-    async with SessionLocal() as session:
-        total = await session.execute(
-            select(func.sum(Report.profit)).where(Report.user_id == user_id)
-        )
+def add_part(name, price):
+    db = SessionLocal()
+    p = Part(name=name, price=price)
+    db.add(p)
+    db.commit()
+    db.close()
 
-        return {"total": total.scalar() or 0}
+
+def get_parts():
+    db = SessionLocal()
+    data = db.query(Part).all()
+    db.close()
+    return data

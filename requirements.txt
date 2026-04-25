@@ -4,3 +4,4 @@ aiogram==3.4.1
 aiosqlite
 pydantic==2.5.3
 sqlalchemy==2.0.25
+python-dotenv
