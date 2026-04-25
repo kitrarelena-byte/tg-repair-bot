@@ -1,69 +1,39 @@
 import asyncio
-
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-from db import Base, engine
-from services import add_report, add_part
 from bot import run_bot
-print("MAIN STARTED")
-# -------------------
-# APP INIT
-# -------------------
-app = FastAPI()
 
-# создаём таблицы
-Base.metadata.create_all(bind=engine)
+print("🚀 MAIN STARTED")
 
-# подключаем mini app (frontend)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🔥 FASTAPI STARTUP")
+
+    # защищённый запуск бота
+    loop = asyncio.get_running_loop()
+    loop.create_task(safe_bot_start())
+
+    yield
+
+    print("🛑 SHUTDOWN")
+
+
+async def safe_bot_start():
+    try:
+        print("🤖 BOT TASK STARTING")
+        await run_bot()
+    except Exception as e:
+        print("💥 BOT CRASH:", e)
+
+
+app = FastAPI(lifespan=lifespan)
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
-# -------------------
-# DATA MODELS (API)
-# -------------------
-class ReportIn(BaseModel):
-    model: str
-    repair_price: float
-    sell_price: float
-
-
-class PartIn(BaseModel):
-    name: str
-    price: float
-
-
-# -------------------
-# API ROUTES
-# -------------------
-@app.post("/report")
-def create_report(r: ReportIn):
-    add_report(r.model, r.repair_price, r.sell_price)
-    return {"ok": True}
-
-
-@app.post("/part")
-def create_part(p: PartIn):
-    add_part(p.name, p.price)
-    return {"ok": True}
-
-
-# -------------------
-# STARTUP EVENT
-# -------------------
-@app.on_event("startup")
-async def startup():
-    print("🔥 FASTAPI STARTED")
-    import asyncio
-   
-    asyncio.create_task(run_bot())
-    print("BOT TASK CREATED")
-
-
-# -------------------
-# HEALTHCHECK
-# -------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
