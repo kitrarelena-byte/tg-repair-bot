@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from bot import run_bot
@@ -24,19 +25,18 @@ async def safe_bot():
     except Exception as e:
         logger.exception(f"BOT ERROR: {e}")
 
-# ---------- MEMORY DB (simple in-memory safe start) ----------
+# ---------- MEMORY DB ----------
 USERS = {}
 REPORTS = []
 
 # ---------- MODELS ----------
 class ReportIn(BaseModel):
     telegram_id: str
-    type: str  # sale / repair
+    type: str
     model: str
     purchase_price: float = 0
     repair_cost: float = 0
     sell_price: float = 0
-
 
 # ---------- LIFESPAN ----------
 @asynccontextmanager
@@ -49,18 +49,21 @@ async def lifespan(app: FastAPI):
 
     logger.info("🛑 SHUTDOWN")
 
-
 # ---------- APP ----------
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC ----------
+# ---------- ROOT FIX (ВАЖНО ДЛЯ TELEGRAM WEBAPP) ----------
+@app.get("/")
+async def root():
+    return FileResponse("static/index.html")
+
+# ---------- STATIC FIX ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-# ---------- REGISTRATION ----------
+# ---------- REGISTER ----------
 @app.post("/register")
 async def register(data: dict):
     tg_id = data["telegram_id"]
@@ -72,8 +75,7 @@ async def register(data: dict):
 
     return USERS[tg_id]
 
-
-# ---------- ADD REPORT (ONLY APP) ----------
+# ---------- REPORT ----------
 @app.post("/report")
 async def create_report(data: ReportIn):
 
@@ -95,7 +97,6 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-
 # ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
@@ -110,22 +111,18 @@ async def analytics():
         "repair_count": len(repairs)
     }
 
-
-# ---------- FILTER BY DATE ----------
+# ---------- REPORTS FILTER ----------
 @app.get("/reports")
 async def get_reports(days: int = 7):
 
     since = datetime.utcnow() - timedelta(days=days)
 
-    filtered = [
+    return [
         r for r in REPORTS
         if datetime.fromisoformat(r["created_at"]) >= since
     ]
 
-    return filtered
-
-
-# ---------- TOP MODELS ----------
+# ---------- TOP ----------
 @app.get("/top")
 async def top_models():
 
@@ -136,7 +133,6 @@ async def top_models():
 
     return sorted(stats.items(), key=lambda x: x[1], reverse=True)
 
-
 # ---------- ADMIN ----------
 @app.get("/admin")
 async def admin():
@@ -146,16 +142,19 @@ async def admin():
         "reports": REPORTS
     }
 
-
 # ---------- HEALTH ----------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
-
 
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port
+    )
