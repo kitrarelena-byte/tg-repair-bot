@@ -1,39 +1,70 @@
 import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from bot import run_bot
 
-print("🚀 MAIN STARTED")
+
+# ---------------- LOGGING ----------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+logger.info("🚀 MAIN FILE LOADED")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("🔥 FASTAPI STARTUP")
-
-    # защищённый запуск бота
-    loop = asyncio.get_running_loop()
-    loop.create_task(safe_bot_start())
-
-    yield
-
-    print("🛑 SHUTDOWN")
-
-
+# ---------------- BOT SAFE START ----------------
 async def safe_bot_start():
     try:
-        print("🤖 BOT TASK STARTING")
+        logger.info("🤖 BOT STARTING...")
         await run_bot()
     except Exception as e:
-        print("💥 BOT CRASH:", e)
+        logger.exception(f"💥 BOT CRASH: {e}")
 
 
+# ---------------- LIFESPAN ----------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("🔥 FASTAPI STARTUP BEGIN")
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(safe_bot_start())
+        logger.info("✅ BOT TASK CREATED")
+    except Exception as e:
+        logger.exception(f"💥 ERROR STARTING BOT TASK: {e}")
+
+    logger.info("🔥 FASTAPI STARTUP END")
+    yield
+
+    logger.info("🛑 FASTAPI SHUTDOWN")
+
+
+# ---------------- APP ----------------
 app = FastAPI(lifespan=lifespan)
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+# ---------------- STATIC ----------------
+STATIC_DIR = "static"
+
+if not os.path.exists(STATIC_DIR):
+    logger.warning("⚠️ static folder NOT FOUND, creating...")
+    os.makedirs(STATIC_DIR, exist_ok=True)
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 
+# ---------------- HEALTHCHECK ----------------
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
+
+
+logger.info("✅ APP INITIALIZED")
