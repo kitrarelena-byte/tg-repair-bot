@@ -5,7 +5,7 @@ from aiogram.filters import CommandStart
 import asyncio
 
 TOKEN = os.getenv("BOT_TOKEN")
-print("TOKEN =", TOKEN)
+print("ENV BOT TOKEN =", os.getenv("BOT_TOKEN"))
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
