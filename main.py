@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from db import Base, engine
 from services import add_report, add_part
 from bot import run_bot
-
+print("MAIN STARTED")
 # -------------------
 # APP INIT
 # -------------------
@@ -54,7 +54,8 @@ def create_part(p: PartIn):
 # -------------------
 @app.on_event("startup")
 async def startup():
-    # запускаем Telegram-бота в фоне
+    print("🔥 FASTAPI STARTED")
+    import asyncio
     asyncio.create_task(run_bot())
 
 
