@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
+
 <meta name="viewport"
 content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
@@ -57,6 +58,11 @@ button {
 }
 
 small { opacity: 0.7; }
+
+* {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
 </style>
 </head>
 
@@ -114,13 +120,12 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-const API = "";
-
-let parts = JSON.parse(localStorage.getItem("parts") || "[]");
-
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
+
+// ---------- PARTS ----------
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
@@ -134,11 +139,12 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p, i) => {
+
         const li = document.createElement("li");
         li.innerText = ${p.name} - ${p.price};
 
         li.onclick = () => {
-            parts.splice(i,1);
+            parts.splice(i, 1);
             saveParts();
             renderParts();
         };
@@ -148,6 +154,7 @@ function renderParts() {
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
+
         select.appendChild(opt);
     });
 }
@@ -156,19 +163,23 @@ function addPart() {
     const name = document.getElementById("part_name").value;
     const price = document.getElementById("part_price").value;
 
-    parts.push({name, price});
+    if (!name || !price) return;
+
+    parts.push({ name, price });
     saveParts();
     renderParts();
 }
 
+// ---------- SALE ----------
 async function sendSale() {
+
     const data = {
         telegram_id: safeUserId(),
         type: "sale",
-        model: sale_model.value,
-        purchase_price: Number(sale_purchase.value),
-        repair_cost: Number(sale_repair.value),
-        sell_price: Number(sale_sell.value)
+        model: document.getElementById("sale_model").value,
+        purchase_price: Number(document.getElementById("sale_purchase").value || 0),
+        repair_cost: Number(document.getElementById("sale_repair").value || 0),
+        sell_price: Number(document.getElementById("sale_sell").value || 0)
     };
 
     const res = await fetch("/report", {
@@ -178,11 +189,17 @@ async function sendSale() {
     });
 
     const r = await res.json();
-    sale_profit.innerText = "💰 Profit: " + r.profit;
+
+    document.getElementById("sale_profit").innerText =
+        "💰 Profit: " + r.profit;
 }
 
+// ---------- REPAIR ----------
 async function sendRepair() {
-    const selected = [...parts_select.selectedOptions].map(o => JSON.parse(o.value));
+
+    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
+        .map(o => JSON.parse(o.value));
+
     const partsSum = selected.reduce((s,p)=>s+Number(p.price),0);
 
     await fetch("/report", {
@@ -191,9 +208,9 @@ async function sendRepair() {
         body: JSON.stringify({
             telegram_id: safeUserId(),
             type: "repair",
-            model: repair_model.value,
+            model: document.getElementById("repair_model").value,
             purchase_price: 0,
-            repair_cost: Number(repair_price.value) + partsSum,
+            repair_cost: Number(document.getElementById("repair_price").value || 0) + partsSum,
             sell_price: 0
         })
     });
@@ -201,13 +218,15 @@ async function sendRepair() {
     alert("Ремонт сохранён");
 }
 
+// ---------- ANALYTICS ----------
 async function loadAnalytics() {
+
     showTab("analytics");
 
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    analytics.innerHTML = `
+    document.getElementById("analytics").innerHTML = `
         <h3>📈 Аналитика</h3>
         <p>Прибыль: ${d.total_profit}</p>
         <p>Продаж: ${d.sales_count}</p>
@@ -215,26 +234,32 @@ async function loadAnalytics() {
     `;
 }
 
+// ---------- ADMIN ----------
 async function loadAdmin() {
+
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    admin.innerHTML = `
+    document.getElementById("admin").innerHTML = `
         <h3>👤 Админ</h3>
         <p>Users: ${Object.keys(d.users).length}</p>
         <p>Reports: ${d.reports.length}</p>
     `;
 }
 
+// ---------- TABS ----------
 function showTab(tab) {
+
     ["sale","repair","parts","analytics","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
+
     document.getElementById(tab).classList.remove("hidden");
 }
 
+// ---------- INIT ----------
 renderParts();
 </script>
 

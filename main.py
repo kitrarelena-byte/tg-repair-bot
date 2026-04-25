@@ -13,7 +13,7 @@ from bot import run_bot
 
 # ---------- LOG ----------
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 
 logger.info("🚀 MAIN STARTED")
 
@@ -38,30 +38,28 @@ class ReportIn(BaseModel):
     repair_cost: float = 0
     sell_price: float = 0
 
+
 # ---------- LIFESPAN ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🔥 STARTUP")
-
     asyncio.create_task(safe_bot())
-
     yield
-
     logger.info("🛑 SHUTDOWN")
+
 
 # ---------- APP ----------
 app = FastAPI(lifespan=lifespan)
 
-# ---------- ROOT FIX (ВАЖНО ДЛЯ TELEGRAM WEBAPP) ----------
+# ---------- ROOT (FIX MINI APP) ----------
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")
 
-# ---------- STATIC FIX ----------
-if not os.path.exists("static"):
-    os.makedirs("static")
 
+# ---------- STATIC ----------
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # ---------- REGISTER ----------
 @app.post("/register")
@@ -74,6 +72,7 @@ async def register(data: dict):
         }
 
     return USERS[tg_id]
+
 
 # ---------- REPORT ----------
 @app.post("/report")
@@ -97,6 +96,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
+
 # ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
@@ -111,7 +111,8 @@ async def analytics():
         "repair_count": len(repairs)
     }
 
-# ---------- REPORTS FILTER ----------
+
+# ---------- REPORTS ----------
 @app.get("/reports")
 async def get_reports(days: int = 7):
 
@@ -122,9 +123,10 @@ async def get_reports(days: int = 7):
         if datetime.fromisoformat(r["created_at"]) >= since
     ]
 
+
 # ---------- TOP ----------
 @app.get("/top")
-async def top_models():
+async def top():
 
     stats = {}
 
@@ -133,28 +135,22 @@ async def top_models():
 
     return sorted(stats.items(), key=lambda x: x[1], reverse=True)
 
+
 # ---------- ADMIN ----------
 @app.get("/admin")
 async def admin():
+    return {"users": USERS, "reports": REPORTS}
 
-    return {
-        "users": USERS,
-        "reports": REPORTS
-    }
 
 # ---------- HEALTH ----------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8000))
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
