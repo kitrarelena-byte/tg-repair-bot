@@ -17,14 +17,14 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# ---------- START ----------
+
 @dp.message(CommandStart())
 async def start(message: types.Message):
     kb = ReplyKeyboardMarkup(
         keyboard=[
             [
                 KeyboardButton(
-                    text="📱 Открыть приложение",
+                    text="📱 Открыть CRM",
                     web_app=WebAppInfo(url=WEBAPP_URL)
                 )
             ]
@@ -32,36 +32,43 @@ async def start(message: types.Message):
         resize_keyboard=True
     )
 
-    await message.answer(
-        "🚀 Открой мини приложение:",
-        reply_markup=kb
-    )
+    await message.answer("🚀 Открой CRM:", reply_markup=kb)
 
-# ---------- MINI APP DATA ----------
+
 @dp.message(lambda message: message.web_app_data is not None)
 async def webapp_handler(message: types.Message):
     data = json.loads(message.web_app_data.data)
 
-    model = data.get("model")
-    repair = data.get("repair")
-    sell = data.get("sell")
+    type_ = data.get("type")
 
-    try:
-        profit = int(sell) - int(repair)
-    except:
-        profit = "ошибка"
+    if type_ == "sale":
+        profit = int(data["sell"]) - int(data["repair"])
 
-    await message.answer(
-        f"📊 Отчет:\n\n"
-        f"📱 Модель: {model}\n"
-        f"🔧 Ремонт: {repair}\n"
-        f"💰 Продажа: {sell}\n"
-        f"📈 Чистыми: {profit}"
-    )
+        text = (
+            f"📊 Продажа\n\n"
+            f"📱 {data['model']}\n"
+            f"🔧 Ремонт: {data['repair']}\n"
+            f"💰 Продажа: {data['sell']}\n"
+            f"📈 Чистыми: {profit}"
+        )
 
-# ---------- RUN ----------
+    elif type_ == "repair":
+        parts = ", ".join(data["parts"])
+
+        text = (
+            f"🛠 Ремонт\n\n"
+            f"📱 {data['model']}\n"
+            f"🔩 Запчасти: {parts}\n"
+            f"💰 Цена: {data['price']}"
+        )
+
+    else:
+        text = "⚠️ Неизвестный тип отчета"
+
+    await message.answer(text)
+
+
 async def run_bot():
-    print("🤖 BOT POLLING START")
-
+    print("🤖 BOT STARTED")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)

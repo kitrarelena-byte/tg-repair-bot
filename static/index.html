@@ -1,85 +1,192 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Repair CRM</title>
+<meta charset="UTF-8">
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-        }
+<title>CRM</title>
 
-        .container {
-            padding: 20px;
-        }
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-        h1 {
-            text-align: center;
-        }
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+}
 
-        .card {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-        }
+.container {
+    padding: 15px;
+}
 
-        input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 8px;
-            border-radius: 8px;
-            border: none;
-        }
+.tabbar {
+    display: flex;
+    justify-content: space-around;
+    background: #1e293b;
+    padding: 10px;
+}
 
-        button {
-            margin-top: 10px;
-            padding: 12px;
-            width: 100%;
-            border-radius: 10px;
-            border: none;
-            background: #22c55e;
-            color: black;
-            font-weight: bold;
-        }
-    </style>
+.tab {
+    cursor: pointer;
+}
+
+.hidden {
+    display: none;
+}
+
+.card {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+}
+
+input, select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: none;
+}
+
+button {
+    margin-top: 10px;
+    padding: 12px;
+    width: 100%;
+    border-radius: 10px;
+    border: none;
+    background: #22c55e;
+    font-weight: bold;
+}
+</style>
 </head>
 
 <body>
+
+<div class="tabbar">
+    <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+    <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+    <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+</div>
+
 <div class="container">
 
-    <h1>📱 Repair CRM</h1>
+<!-- SALE -->
+<div id="sale" class="card">
+    <h3>Продажа</h3>
+    <input id="sale_model" placeholder="Модель">
+    <input id="sale_repair" placeholder="Цена ремонта">
+    <input id="sale_sell" placeholder="Цена продажи">
+    <button onclick="sendSale()">Сохранить</button>
+</div>
 
-    <div class="card">
-        <h3>Новый отчет</h3>
+<!-- REPAIR -->
+<div id="repair" class="card hidden">
+    <h3>Ремонт</h3>
+    <input id="repair_model" placeholder="Модель">
 
-        <input id="model" placeholder="Модель телефона">
-        <input id="repair" placeholder="Цена ремонта">
-        <input id="sell" placeholder="Цена продажи">
+    <select id="parts_select" multiple></select>
 
-        <button onclick="sendData()">Сохранить</button>
-    </div>
+    <input id="repair_price" placeholder="Цена ремонта">
+    <button onclick="sendRepair()">Сохранить</button>
+</div>
+
+<!-- PARTS -->
+<div id="parts" class="card hidden">
+    <h3>Запчасти</h3>
+    <input id="part_name" placeholder="Название">
+    <input id="part_price" placeholder="Цена">
+    <button onclick="addPart()">Добавить</button>
+
+    <ul id="parts_list"></ul>
+</div>
 
 </div>
 
 <script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+const tg = window.Telegram.WebApp;
+tg.expand();
 
-    function sendData() {
-        const data = {
-            model: document.getElementById("model").value,
-            repair: document.getElementById("repair").value,
-            sell: document.getElementById("sell").value
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+
+function saveParts() {
+    localStorage.setItem("parts", JSON.stringify(parts));
+}
+
+function renderParts() {
+    const list = document.getElementById("parts_list");
+    const select = document.getElementById("parts_select");
+
+    list.innerHTML = "";
+    select.innerHTML = "";
+
+    parts.forEach((p, i) => {
+        const li = document.createElement("li");
+        li.innerText = p.name + " - " + p.price;
+
+        li.onclick = () => {
+            parts.splice(i,1);
+            saveParts();
+            renderParts();
         };
 
-        tg.sendData(JSON.stringify(data));
-    }
+        list.appendChild(li);
+
+        const option = document.createElement("option");
+        option.value = p.name;
+        option.text = p.name;
+
+        select.appendChild(option);
+    });
+}
+
+function addPart() {
+    const name = document.getElementById("part_name").value;
+    const price = document.getElementById("part_price").value;
+
+    parts.push({name, price});
+    saveParts();
+    renderParts();
+}
+
+function sendSale() {
+    const data = {
+        type: "sale",
+        model: document.getElementById("sale_model").value,
+        repair: document.getElementById("sale_repair").value,
+        sell: document.getElementById("sale_sell").value
+    };
+
+    tg.sendData(JSON.stringify(data));
+}
+
+function sendRepair() {
+    const select = document.getElementById("parts_select");
+
+    const selected = Array.from(select.selectedOptions).map(o => o.value);
+
+    const data = {
+        type: "repair",
+        model: document.getElementById("repair_model").value,
+        parts: selected,
+        price: document.getElementById("repair_price").value
+    };
+
+    tg.sendData(JSON.stringify(data));
+}
+
+function showTab(tab) {
+    ["sale","repair","parts"].forEach(id => {
+        document.getElementById(id).classList.add("hidden");
+    });
+
+    document.getElementById(tab).classList.remove("hidden");
+}
+
+renderParts();
 </script>
 
 </body>
