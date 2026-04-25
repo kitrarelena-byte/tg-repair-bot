@@ -37,14 +37,14 @@ Base = declarative_base()
 
 # ---------- MODELS ----------
 class User(Base):
-    tablename = "users"
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(String, unique=True)
     role = Column(String, default="user")
 
 class Report(Base):
-    tablename = "reports"
+    __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(String)
