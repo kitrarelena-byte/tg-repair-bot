@@ -48,7 +48,7 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/app", StaticFiles(directory="static", html=True), name="static")
 
 # ---------- REGISTER ----------
 @app.post("/register")
