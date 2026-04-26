@@ -44,12 +44,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC ----------
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount("/app", StaticFiles(directory="static", html=True), name="static")
-
 # ---------- REGISTER ----------
 @app.post("/register")
 async def register(data: dict):
@@ -84,7 +78,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- АНАЛИТИКА (ИСПРАВЛЕНО) ----------
+# ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -93,15 +87,14 @@ async def analytics():
 
     sales_profit = sum(r["profit"] for r in sales)
     repairs_profit = sum(r["profit"] for r in repairs)
-    total = sales_profit + repairs_profit
 
     return {
         "sales_profit": sales_profit,
         "repairs_profit": repairs_profit,
-        "total_profit": total
+        "total_profit": sales_profit + repairs_profit
     }
 
-# ---------- СПИСОК ОТЧЕТОВ ----------
+# ---------- REPORTS ----------
 @app.get("/reports")
 async def get_reports():
     return REPORTS
@@ -113,6 +106,17 @@ async def admin():
         "users": USERS,
         "reports": REPORTS
     }
+
+# ---------- HEALTH ----------
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+# ---------- STATIC (ВАЖНО: В КОНЦЕ!) ----------
+if not os.path.exists("static"):
+    os.makedirs("static")
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 # ---------- RUN ----------
 if __name__ == "__main__":

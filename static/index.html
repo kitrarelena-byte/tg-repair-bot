@@ -102,15 +102,18 @@ button {
 
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) {
+    tg.ready();
+    tg.expand();
+}
 
+// ❗ FIX 1 — БЫЛА СИНТАКСИЧЕСКАЯ ОШИБКА
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
 
-// ---------- PARTS ----------
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
 }
@@ -126,8 +129,9 @@ function renderParts() {
         const li = document.createElement("li");
         li.innerText = p.name + " - " + p.price + " ❌";
 
-        li.onclick = () => {
-            parts.splice(i,1);
+        // ❗ удаление работает
+        li.onclick = function () {
+            parts.splice(i, 1);
             saveParts();
             renderParts();
         };
@@ -184,7 +188,9 @@ async function sendRepair() {
             telegram_id: safeUserId(),
             type: "repair",
             model: document.getElementById("repair_model").value,
-            repair_cost: Number(document.getElementById("repair_price").value) + partsSum
+            purchase_price: 0,
+            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
+            sell_price: 0
         })
     });
 
@@ -193,9 +199,10 @@ async function sendRepair() {
 
 // ---------- TABS ----------
 function showTab(tab) {
-    ["sale","repair","parts","analytics","admin","reports"].forEach(id=>{
+    ["sale","repair","parts","analytics","reports","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
+
     document.getElementById(tab).classList.remove("hidden");
 }
 
@@ -223,7 +230,7 @@ async function loadReports() {
     let html = "<h3>Отчеты</h3>";
 
     data.forEach(r => {
-        html += <p>${r.model} | ${r.type} | ${r.profit}</p>;
+        html += "<p>" + r.model + " | " + r.type + " | " + r.profit + "</p>";
     });
 
     document.getElementById("reports").innerHTML = html;
@@ -238,12 +245,11 @@ async function loadAdmin() {
 
     let html = "<h3>Админ</h3>";
 
-    html += "<p>Пользователи:</p>";
     Object.keys(d.users).forEach(u => {
-        html += <p>${u} (${d.users[u].role})</p>;
+        html += "<p>" + u + " (" + d.users[u].role + ")</p>";
     });
 
-    html += "<p>Отчеты: " + d.reports.length + "</p>";
+    html += "<p>Отчетов: " + d.reports.length + "</p>";
 
     document.getElementById("admin").innerHTML = html;
 }
