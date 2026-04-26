@@ -150,7 +150,7 @@ if (tg) {
 }
 
 // ⚠️ ВАЖНО: у тебя Railway → нужен полный URL
-const API = "https://web-production-e1089.up.railway.app";
+const API = "";
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
@@ -195,16 +195,28 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p, i) => {
+
         const li = document.createElement("li");
-        li.innerHTML = `
-            ${p.name} - ${p.price}
-            <button onclick="deletePart(${i})" style="margin-left:10px;background:red;color:white;border:none;border-radius:6px;">✕</button>
-        `;
+
+        li.innerText = p.name + " - " + p.price;
+
+        const btn = document.createElement("button");
+        btn.innerText = "✕";
+        btn.style.marginLeft = "10px";
+        btn.style.background = "red";
+        btn.onclick = () => {
+            parts.splice(i,1);
+            saveParts();
+            renderParts();
+        };
+
+        li.appendChild(btn);
         list.appendChild(li);
 
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
+
         select.appendChild(opt);
     });
 }
@@ -278,6 +290,13 @@ async function loadAnalytics() {
     showTab("analytics");
 
     const res = await fetch(API + "/analytics");
+    let data;
+    try {
+        data = await res.json();
+    } catch (e) {
+        console.error("НЕ JSON ОТ СЕРВЕРА", e);
+        return;
+    )
     const d = await res.json();
 
     document.getElementById("analytics").innerHTML = `
