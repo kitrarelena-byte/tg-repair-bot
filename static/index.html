@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <title>CRM</title>
 
@@ -16,8 +16,6 @@ body {
     color: white;
 }
 
-.container { padding: 15px; }
-
 .tabbar {
     display: flex;
     justify-content: space-around;
@@ -27,31 +25,30 @@ body {
 
 .tab { cursor: pointer; }
 
-.hidden { display: none; }
-
 .card {
     background: #1e293b;
     padding: 15px;
     border-radius: 12px;
-    margin-bottom: 15px;
+    margin: 10px;
+}
+
+.hidden { display:none }
+
+button {
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border:none;
+    border-radius:10px;
+    background:#22c55e;
 }
 
 input, select {
-    width: 100%;
-    padding: 10px;
-    margin-top: 8px;
-    border-radius: 8px;
-    border: none;
-}
-
-button {
-    margin-top: 10px;
-    padding: 12px;
-    width: 100%;
-    border-radius: 10px;
-    border: none;
-    background: #22c55e;
-    font-weight: bold;
+    width:100%;
+    padding:10px;
+    margin-top:8px;
+    border-radius:8px;
+    border:none;
 }
 </style>
 </head>
@@ -59,182 +56,135 @@ button {
 <body>
 
 <div class="tabbar">
-    <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
-    <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
-    <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-    <div class="tab" onclick="showTab('analytics')">📈 Аналитика</div>
-    <div class="tab" onclick="loadAdmin()">👤 Админ</div>
+<div class="tab" onclick="showTab('sale')">Продажа</div>
+<div class="tab" onclick="showTab('repair')">Ремонт</div>
+<div class="tab" onclick="showTab('reports')">Отчеты</div>
+<div class="tab" onclick="loadAnalytics()">Аналитика</div>
+<div class="tab" onclick="loadAdmin()">Админ</div>
 </div>
 
-<div class="container">
-
 <div id="sale" class="card">
-    <h3>Продажа</h3>
-    <input id="sale_model" placeholder="Модель">
-    <input id="sale_purchase" placeholder="Цена покупки">
-    <input id="sale_repair" placeholder="Цена ремонта">
-    <input id="sale_sell" placeholder="Цена продажи">
-    <button onclick="sendSale()">Сохранить</button>
-    <small id="sale_profit"></small>
+<input id="sale_model" placeholder="Модель">
+<input id="sale_purchase" placeholder="Цена покупки">
+<input id="sale_repair" placeholder="Ремонт">
+<input id="sale_sell" placeholder="Продажа">
+<button onclick="sendSale()">Сохранить</button>
+<div id="sale_profit"></div>
 </div>
 
 <div id="repair" class="card hidden">
-    <h3>Ремонт</h3>
-    <input id="repair_model" placeholder="Модель">
-    <select id="parts_select" multiple></select>
-    <input id="repair_price" placeholder="Цена ремонта">
-    <button onclick="sendRepair()">Сохранить</button>
+<input id="repair_model" placeholder="Модель">
+<input id="repair_price" placeholder="Цена ремонта">
+<button onclick="sendRepair()">Сохранить</button>
 </div>
 
-<div id="parts" class="card hidden">
-    <h3>Запчасти</h3>
-    <input id="part_name" placeholder="Название">
-    <input id="part_price" placeholder="Цена">
-    <button onclick="addPart()">Добавить</button>
-    <ul id="parts_list"></ul>
-</div>
-
+<div id="reports" class="card hidden"></div>
 <div id="analytics" class="card hidden"></div>
 <div id="admin" class="card hidden"></div>
 
-</div>
-
 <script>
-const tg = window.Telegram?.WebApp;
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
 
-if (tg) {
-    tg.ready();
-    tg.expand();
+function userId() {
+    return tg.initDataUnsafe?.user?.id || "0";
 }
 
-let parts = JSON.parse(localStorage.getItem("parts") || "[]");
-
-function safeUserId() {
-    return tg?.initDataUnsafe?.user?.id || "0";
-}
-
-function saveParts() {
-    localStorage.setItem("parts", JSON.stringify(parts));
-}
-
-function renderParts() {
-    const list = document.getElementById("parts_list");
-    const select = document.getElementById("parts_select");
-
-    list.innerHTML = "";
-    select.innerHTML = "";
-
-    for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-
-        const li = document.createElement("li");
-        li.innerText = p.name + " - " + p.price;
-
-        li.onclick = function () {
-            parts.splice(i, 1);
-            saveParts();
-            renderParts();
-        };
-
-        list.appendChild(li);
-
-        const opt = document.createElement("option");
-        opt.value = JSON.stringify(p);
-        opt.text = p.name;
-        select.appendChild(opt);
-    }
-}
-
-function addPart() {
-    const name = document.getElementById("part_name").value;
-    const price = document.getElementById("part_price").value;
-
-    parts.push({ name: name, price: price });
-    saveParts();
-    renderParts();
-}
-
+// ---------- SALE ----------
 async function sendSale() {
-    const data = {
-        telegram_id: safeUserId(),
-        type: "sale",
-        model: document.getElementById("sale_model").value,
-        purchase_price: Number(document.getElementById("sale_purchase").value),
-        repair_cost: Number(document.getElementById("sale_repair").value),
-        sell_price: Number(document.getElementById("sale_sell").value)
-    };
 
     const res = await fetch("/report", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(data)
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+            telegram_id: userId(),
+            type:"sale",
+            model: document.getElementById("sale_model").value,
+            purchase_price: Number(document.getElementById("sale_purchase").value),
+            repair_cost: Number(document.getElementById("sale_repair").value),
+            sell_price: Number(document.getElementById("sale_sell").value)
+        })
     });
 
     const r = await res.json();
     document.getElementById("sale_profit").innerText = "Profit: " + r.profit;
 }
 
+// ---------- REPAIR ----------
 async function sendRepair() {
-    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
-        .map(o => JSON.parse(o.value));
-
-    let partsSum = 0;
-    for (let i = 0; i < selected.length; i++) {
-        partsSum += Number(selected[i].price);
-    }
 
     await fetch("/report", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-            telegram_id: safeUserId(),
-            type: "repair",
+            telegram_id: userId(),
+            type:"repair",
             model: document.getElementById("repair_model").value,
-            purchase_price: 0,
-            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
-            sell_price: 0
+            repair_cost: Number(document.getElementById("repair_price").value)
         })
     });
 
-    alert("Saved repair");
+    alert("Сохранено");
 }
 
-function showTab(tab) {
-    const ids = ["sale","repair","parts","analytics","admin"];
+// ---------- REPORTS ----------
+async function loadReports() {
+    showTab("reports");
 
-    for (let i = 0; i < ids.length; i++) {
-        document.getElementById(ids[i]).classList.add("hidden");
-    }
+    const r = await fetch("/reports");
+    const data = await r.json();
 
-    document.getElementById(tab).classList.remove("hidden");
+    let html = "<h3>Отчеты</h3>";
+
+    data.reverse().forEach(x=>{
+        html += `<div>
+            ${x.model} | ${x.type} | 💰 ${x.profit}
+        </div>`;
+    });
+
+    document.getElementById("reports").innerHTML = html;
 }
 
+// ---------- ANALYTICS ----------
 async function loadAnalytics() {
     showTab("analytics");
 
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    document.getElementById("analytics").innerHTML =
-        "<h3>Analytics</h3>" +
-        "<p>Total: " + d.total_profit + "</p>" +
-        "<p>Sales: " + d.sales_count + "</p>" +
-        "<p>Repairs: " + d.repair_count + "</p>";
+    document.getElementById("analytics").innerHTML = `
+        <h3>Аналитика</h3>
+        <p>Продажи: ${d.sales_profit}</p>
+        <p>Ремонты: ${d.repairs_profit}</p>
+        <p>Общая: ${d.total_profit}</p>
+    `;
 }
 
+// ---------- ADMIN ----------
 async function loadAdmin() {
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    document.getElementById("admin").innerHTML =
-        "<h3>Admin</h3>" +
-        "<p>Users: " + Object.keys(d.users).length + "</p>" +
-        "<p>Reports: " + d.reports.length + "</p>";
+    document.getElementById("admin").innerHTML = `
+        <h3>Админ</h3>
+        <p>Пользователи: ${Object.keys(d.users).length}</p>
+        <p>Отчеты: ${d.reports.length}</p>
+    `;
 }
 
-renderParts();
+// ---------- NAV ----------
+function showTab(tab) {
+    ["sale","repair","reports","analytics","admin"].forEach(id=>{
+        document.getElementById(id).classList.add("hidden");
+    });
+
+    document.getElementById(tab).classList.remove("hidden");
+
+    if(tab==="reports") loadReports();
+}
 </script>
 
 </body>
