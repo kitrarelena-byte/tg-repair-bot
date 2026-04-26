@@ -87,7 +87,7 @@ button {
     <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
     <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
     <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-    <div class="tab" onclick="loadAnalytics('analytics')">📈 Аналитика</div>
+    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
     <div class="tab" onclick="loadAdmin()">👤 Админ</div>
     <div class="tab" onclick="loadProfile()">👤 Профиль</div>
 </div>
@@ -149,173 +149,186 @@ if (tg) {
     tg.expand();
 }
 
-/* 🔥 ВАЖНО: ТВОЙ BACKEND */
+// ⚠️ ВАЖНО: у тебя Railway → нужен полный URL
 const API = "https://web-production-e1089.up.railway.app";
 
-/* USER (fallback чтобы не было пусто) */
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+
+// ---------- USER ----------
 function getUser() {
-    const u = tg?.initDataUnsafe?.user;
     return {
-        id: u?.id || "test_user",
-        username: u?.username || "guest"
+        id: tg?.initDataUnsafe?.user?.id?.toString() || "0",
+        username: tg?.initDataUnsafe?.user?.username || "unknown"
     };
 }
 
-/* ---------- PARTS ---------- */
-let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+// ---------- REGISTER ----------
+async function registerUser() {
+    const user = getUser();
 
+    try {
+        await fetch(API + "/register", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                telegram_id: user.id
+            })
+        });
+    } catch (e) {
+        console.log("REGISTER ERROR", e);
+    }
+}
+
+// вызываем сразу
+registerUser();
+
+// ---------- PARTS ----------
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
 }
 
 function renderParts() {
-    parts_list.innerHTML = "";
-    parts_select.innerHTML = "";
+    const list = document.getElementById("parts_list");
+    const select = document.getElementById("parts_select");
+
+    list.innerHTML = "";
+    select.innerHTML = "";
 
     parts.forEach((p, i) => {
         const li = document.createElement("li");
         li.innerHTML = `
             ${p.name} - ${p.price}
-            <button onclick="delPart(${i})">❌</button>
+            <button onclick="deletePart(${i})" style="margin-left:10px;background:red;color:white;border:none;border-radius:6px;">✕</button>
         `;
-        parts_list.appendChild(li);
+        list.appendChild(li);
 
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
-        parts_select.appendChild(opt);
+        select.appendChild(opt);
     });
 }
 
-function delPart(i) {
+function deletePart(i) {
     parts.splice(i, 1);
     saveParts();
     renderParts();
 }
 
 function addPart() {
-    parts.push({
-        name: part_name.value,
-        price: part_price.value
-    });
+    const name = document.getElementById("part_name").value;
+    const price = document.getElementById("part_price").value;
 
+    if (!name || !price) return;
+
+    parts.push({name, price});
     saveParts();
     renderParts();
 }
 
-/* ---------- SALE ---------- */
+// ---------- SALE ----------
 async function sendSale() {
+    const user = getUser();
+
     const res = await fetch(API + "/report", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
-            telegram_id: getUser().id,
+            telegram_id: user.id,
             type: "sale",
-            model: sale_model.value,
-            purchase_price: Number(sale_purchase.value),
-            repair_cost: Number(sale_repair.value),
-            sell_price: Number(sale_sell.value)
+            model: document.getElementById("sale_model").value,
+            purchase_price: Number(document.getElementById("sale_purchase").value),
+            repair_cost: Number(document.getElementById("sale_repair").value),
+            sell_price: Number(document.getElementById("sale_sell").value)
         })
     });
 
-    const data = await res.json();
-    sale_profit.innerText = "Profit: " + data.profit;
+    const r = await res.json();
+    document.getElementById("sale_profit").innerText = "Прибыль: " + r.profit;
 }
 
-/* ---------- REPAIR ---------- */
+// ---------- REPAIR ----------
 async function sendRepair() {
-    const selected = [...parts_select.selectedOptions]
+    const user = getUser();
+
+    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
         .map(o => JSON.parse(o.value));
 
-    const partsSum = selected.reduce((s, p) => s + Number(p.price), 0);
+    let partsSum = 0;
+    selected.forEach(p => partsSum += Number(p.price));
 
     await fetch(API + "/report", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
-            telegram_id: getUser().id,
+            telegram_id: user.id,
             type: "repair",
-            model: repair_model.value,
+            model: document.getElementById("repair_model").value,
             purchase_price: 0,
-            repair_cost: Number(repair_price.value) + partsSum,
+            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
             sell_price: 0
         })
     });
 
-    alert("Сохранено");
+    alert("Ремонт сохранён");
 }
 
-/* ---------- 🔥 АНАЛИТИКА (FIX) ---------- */
+// ---------- ANALYTICS ----------
 async function loadAnalytics() {
     showTab("analytics");
 
-    try {
-        const res = await fetch(API + "/analytics");
+    const res = await fetch(API + "/analytics");
+    const d = await res.json();
 
-        const text = await res.text();
-
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch {
-            console.error("Сервер вернул НЕ JSON:", text);
-            analytics.innerHTML = "<p>Ошибка сервера</p>";
-            return;
-        }
-
-        analytics.innerHTML = `
-            <h3>Аналитика</h3>
-            <p>Продажи: ${data.sales_profit}</p>
-            <p>Ремонт: ${data.repairs_profit}</p>
-            <p><b>Итого: ${data.total_profit}</b></p>
-        `;
-
-    } catch (e) {
-        analytics.innerHTML = "<p>Ошибка загрузки</p>";
-        console.error(e);
-    }
-}
-
-/* ---------- ADMIN (чтобы не падал) ---------- */
-async function loadAdmin() {
-    showTab("admin");
-
-    try {
-        const res = await fetch(API + "/admin");
-        const data = await res.json();
-
-        admin.innerHTML = `
-            <h3>Админ</h3>
-            <p>Пользователи: ${Object.keys(data.users || {}).length}</p>
-            <p>Отчеты: ${data.reports?.length || 0}</p>
-        `;
-    } catch {
-        admin.innerHTML = "<p>Ошибка</p>";
-    }
-}
-
-/* ---------- PROFILE ---------- */
-function loadProfile() {
-    showTab("profile");
-
-    const u = getUser();
-
-    profile.innerHTML = `
-        <h3>Профиль</h3>
-        <p>ID: ${u.id}</p>
-        <p>Username: ${u.username}</p>
+    document.getElementById("analytics").innerHTML = `
+        <h3>Аналитика</h3>
+        <p>Продажи: ${d.sales_profit}</p>
+        <p>Ремонт: ${d.repairs_profit}</p>
+        <p>Общая: ${d.total_profit}</p>
     `;
 }
 
-/* ---------- TABS ---------- */
+// ---------- ADMIN ----------
+async function loadAdmin() {
+    showTab("admin");
+
+    const res = await fetch(API + "/admin");
+    const d = await res.json();
+
+    let users = "";
+    for (let id in d.users) {
+        users += <li>${id} (${d.users[id].role})</li>;
+    }
+
+    document.getElementById("admin").innerHTML = `
+        <h3>Админ</h3>
+        <p>Пользователей: ${Object.keys(d.users).length}</p>
+        <ul>${users}</ul>
+    `;
+}
+
+// ---------- PROFILE ----------
+function loadProfile() {
+    showTab("admin");
+
+    const user = getUser();
+
+    document.getElementById("admin").innerHTML = `
+        <h3>Профиль</h3>
+        <p>ID: ${user.id}</p>
+        <p>Username: ${user.username}</p>
+    `;
+}
+
+// ---------- TABS ----------
 function showTab(tab) {
-    ["sale","repair","parts","analytics","admin","profile"]
-        .forEach(id => document.getElementById(id).classList.add("hidden"));
+    ["sale","repair","parts","analytics","admin"].forEach(id=>{
+        document.getElementById(id).classList.add("hidden");
+    });
 
     document.getElementById(tab).classList.remove("hidden");
 }
 
-/* INIT */
 renderParts();
 </script>
 
