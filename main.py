@@ -18,7 +18,6 @@ logger.info("🚀 MAIN STARTED")
 # ---------- BOT ----------
 async def safe_bot():
     try:
-        logger.info("🤖 BOT START...")
         await run_bot()
     except Exception as e:
         logger.exception(f"BOT ERROR: {e}")
@@ -35,14 +34,21 @@ class ReportIn(BaseModel):
     purchase_price: float = 0
     repair_cost: float = 0
     sell_price: float = 0
+    parts_cost: float = 0   # 🔥 ДОБАВИЛИ (ВАЖНО)
 
-# ---------- LIFESPAN ----------
+# ---------- APP ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
     yield
 
 app = FastAPI(lifespan=lifespan)
+
+# ---------- STATIC ----------
+STATIC_DIR = "static"
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
 
 # ---------- REGISTER ----------
 @app.post("/register")
@@ -51,7 +57,8 @@ async def register(data: dict):
 
     if tg_id not in USERS:
         USERS[tg_id] = {
-            "role": "admin" if len(USERS) == 0 else "user"
+            "role": "admin" if len(USERS) == 0 else "user",
+            "name": data.get("name", f"User {tg_id}")
         }
 
     return USERS[tg_id]
@@ -60,7 +67,13 @@ async def register(data: dict):
 @app.post("/report")
 async def create_report(data: ReportIn):
 
-    profit = data.sell_price - data.purchase_price - data.repair_cost
+    # ✅ ПРАВИЛЬНЫЙ РАСЧЁТ
+    profit = (
+        float(data.sell_price)
+        - float(data.purchase_price)
+        - float(data.repair_cost)
+        - float(data.parts_cost)
+    )
 
     report = {
         "id": len(REPORTS) + 1,
@@ -69,6 +82,7 @@ async def create_report(data: ReportIn):
         "model": data.model,
         "purchase_price": data.purchase_price,
         "repair_cost": data.repair_cost,
+        "parts_cost": data.parts_cost,
         "sell_price": data.sell_price,
         "profit": profit,
         "created_at": datetime.utcnow().isoformat()
@@ -85,13 +99,10 @@ async def analytics():
     sales = [r for r in REPORTS if r["type"] == "sale"]
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
-    sales_profit = sum(r["profit"] for r in sales)
-    repairs_profit = sum(r["profit"] for r in repairs)
-
     return {
-        "sales_profit": sales_profit,
-        "repairs_profit": repairs_profit,
-        "total_profit": sales_profit + repairs_profit
+        "sales_profit": sum(r["profit"] for r in sales),
+        "repairs_profit": sum(r["profit"] for r in repairs),
+        "total_profit": sum(r["profit"] for r in REPORTS)
     }
 
 # ---------- REPORTS ----------
@@ -107,19 +118,8 @@ async def admin():
         "reports": REPORTS
     }
 
-# ---------- HEALTH ----------
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-# ---------- STATIC (ВАЖНО: В КОНЦЕ!) ----------
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
