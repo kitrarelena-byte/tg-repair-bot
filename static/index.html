@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>CRM</title>
 
@@ -16,6 +16,8 @@ body {
     color: white;
 }
 
+.container { padding: 15px; }
+
 .tabbar {
     display: flex;
     justify-content: space-around;
@@ -25,30 +27,30 @@ body {
 
 .tab { cursor: pointer; }
 
+.hidden { display: none; }
+
 .card {
     background: #1e293b;
     padding: 15px;
     border-radius: 12px;
-    margin: 10px;
-}
-
-.hidden { display:none }
-
-button {
-    width:100%;
-    padding:12px;
-    margin-top:10px;
-    border:none;
-    border-radius:10px;
-    background:#22c55e;
+    margin-bottom: 15px;
 }
 
 input, select {
-    width:100%;
-    padding:10px;
-    margin-top:8px;
-    border-radius:8px;
-    border:none;
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: none;
+}
+
+button {
+    margin-top: 10px;
+    padding: 12px;
+    width: 100%;
+    border-radius: 10px;
+    border: none;
+    background: #22c55e;
 }
 </style>
 </head>
@@ -56,50 +58,105 @@ input, select {
 <body>
 
 <div class="tabbar">
-<div class="tab" onclick="showTab('sale')">Продажа</div>
-<div class="tab" onclick="showTab('repair')">Ремонт</div>
-<div class="tab" onclick="showTab('reports')">Отчеты</div>
-<div class="tab" onclick="loadAnalytics()">Аналитика</div>
-<div class="tab" onclick="loadAdmin()">Админ</div>
+    <div class="tab" onclick="showTab('sale')">Продажа</div>
+    <div class="tab" onclick="showTab('repair')">Ремонт</div>
+    <div class="tab" onclick="showTab('parts')">Запчасти</div>
+    <div class="tab" onclick="loadAnalytics()">Аналитика</div>
+    <div class="tab" onclick="loadAdmin()">Админ</div>
 </div>
 
+<div class="container">
+
 <div id="sale" class="card">
-<input id="sale_model" placeholder="Модель">
-<input id="sale_purchase" placeholder="Цена покупки">
-<input id="sale_repair" placeholder="Ремонт">
-<input id="sale_sell" placeholder="Продажа">
-<button onclick="sendSale()">Сохранить</button>
-<div id="sale_profit"></div>
+    <h3>Продажа</h3>
+    <input id="sale_model" placeholder="Модель">
+    <input id="sale_purchase" placeholder="Цена покупки">
+    <input id="sale_repair" placeholder="Цена ремонта">
+    <input id="sale_sell" placeholder="Цена продажи">
+    <button onclick="sendSale()">Сохранить</button>
+    <div id="sale_profit"></div>
 </div>
 
 <div id="repair" class="card hidden">
-<input id="repair_model" placeholder="Модель">
-<input id="repair_price" placeholder="Цена ремонта">
-<button onclick="sendRepair()">Сохранить</button>
+    <h3>Ремонт</h3>
+    <input id="repair_model" placeholder="Модель">
+    <select id="parts_select" multiple></select>
+    <input id="repair_price" placeholder="Цена ремонта">
+    <button onclick="sendRepair()">Сохранить</button>
 </div>
 
-<div id="reports" class="card hidden"></div>
+<div id="parts" class="card hidden">
+    <h3>Запчасти</h3>
+    <input id="part_name" placeholder="Название">
+    <input id="part_price" placeholder="Цена">
+    <button onclick="addPart()">Добавить</button>
+    <ul id="parts_list"></ul>
+</div>
+
 <div id="analytics" class="card hidden"></div>
 <div id="admin" class="card hidden"></div>
 
-<script>
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+</div>
 
-function userId() {
-    return tg.initDataUnsafe?.user?.id || "0";
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) {
+    tg.ready();
+    tg.expand();
 }
 
-// ---------- SALE ----------
-async function sendSale() {
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
+function safeUserId() {
+    return tg?.initDataUnsafe?.user?.id || "0";
+}
+
+function saveParts() {
+    localStorage.setItem("parts", JSON.stringify(parts));
+}
+
+function renderParts() {
+    const list = document.getElementById("parts_list");
+    const select = document.getElementById("parts_select");
+
+    list.innerHTML = "";
+    select.innerHTML = "";
+
+    parts.forEach((p, i) => {
+        const li = document.createElement("li");
+        li.innerText = p.name + " - " + p.price;
+
+        li.onclick = () => {
+            parts.splice(i,1);
+            saveParts();
+            renderParts();
+        };
+
+        list.appendChild(li);
+
+        const opt = document.createElement("option");
+        opt.value = JSON.stringify(p);
+        opt.text = p.name;
+        select.appendChild(opt);
+    });
+}
+
+function addPart() {
+    const name = document.getElementById("part_name").value;
+    const price = document.getElementById("part_price").value;
+
+    parts.push({name, price});
+    saveParts();
+    renderParts();
+}
+
+async function sendSale() {
     const res = await fetch("/report", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
-            telegram_id: userId(),
-            type:"sale",
+            telegram_id: safeUserId(),
+            type: "sale",
             model: document.getElementById("sale_model").value,
             purchase_price: Number(document.getElementById("sale_purchase").value),
             repair_cost: Number(document.getElementById("sale_repair").value),
@@ -111,80 +168,62 @@ async function sendSale() {
     document.getElementById("sale_profit").innerText = "Profit: " + r.profit;
 }
 
-// ---------- REPAIR ----------
 async function sendRepair() {
+    const selected = Array.from(document.getElementById("parts_select").selectedOptions)
+        .map(o => JSON.parse(o.value));
+
+    let partsSum = 0;
+    selected.forEach(p => partsSum += Number(p.price));
 
     await fetch("/report", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify({
-            telegram_id: userId(),
-            type:"repair",
+            telegram_id: safeUserId(),
+            type: "repair",
             model: document.getElementById("repair_model").value,
-            repair_cost: Number(document.getElementById("repair_price").value)
+            purchase_price: 0,
+            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
+            sell_price: 0
         })
     });
 
     alert("Сохранено");
 }
 
-// ---------- REPORTS ----------
-async function loadReports() {
-    showTab("reports");
-
-    const r = await fetch("/reports");
-    const data = await r.json();
-
-    let html = "<h3>Отчеты</h3>";
-
-    data.reverse().forEach(x=>{
-        html += `<div>
-            ${x.model} | ${x.type} | 💰 ${x.profit}
-        </div>`;
+function showTab(tab) {
+    ["sale","repair","parts","analytics","admin"].forEach(id=>{
+        document.getElementById(id).classList.add("hidden");
     });
-
-    document.getElementById("reports").innerHTML = html;
+    document.getElementById(tab).classList.remove("hidden");
 }
 
-// ---------- ANALYTICS ----------
 async function loadAnalytics() {
     showTab("analytics");
 
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    document.getElementById("analytics").innerHTML = `
-        <h3>Аналитика</h3>
-        <p>Продажи: ${d.sales_profit}</p>
-        <p>Ремонты: ${d.repairs_profit}</p>
-        <p>Общая: ${d.total_profit}</p>
-    `;
+    document.getElementById("analytics").innerHTML =
+        "<h3>Аналитика</h3>" +
+        "<p>Общая прибыль: " + d.total_profit + "</p>" +
+        "<p>Продажи: " + d.sales_count + "</p>" +
+        "<p>Ремонты: " + d.repair_count + "</p>";
 }
 
-// ---------- ADMIN ----------
 async function loadAdmin() {
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    document.getElementById("admin").innerHTML = `
-        <h3>Админ</h3>
-        <p>Пользователи: ${Object.keys(d.users).length}</p>
-        <p>Отчеты: ${d.reports.length}</p>
-    `;
+    document.getElementById("admin").innerHTML =
+        "<h3>Админ</h3>" +
+        "<p>Пользователей: " + Object.keys(d.users).length + "</p>" +
+        "<p>Отчетов: " + d.reports.length + "</p>";
 }
 
-// ---------- NAV ----------
-function showTab(tab) {
-    ["sale","repair","reports","analytics","admin"].forEach(id=>{
-        document.getElementById(id).classList.add("hidden");
-    });
-
-    document.getElementById(tab).classList.remove("hidden");
-
-    if(tab==="reports") loadReports();
-}
+renderParts();
 </script>
 
 </body>
