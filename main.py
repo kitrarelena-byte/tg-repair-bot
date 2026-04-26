@@ -10,12 +10,10 @@ from pydantic import BaseModel
 
 from bot import run_bot
 
-# ---------- LOG ----------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 logger.info("🚀 MAIN STARTED")
-
 
 # ---------- BOT ----------
 async def safe_bot():
@@ -25,11 +23,9 @@ async def safe_bot():
     except Exception as e:
         logger.exception(f"BOT ERROR: {e}")
 
-
 # ---------- STORAGE ----------
 USERS = {}
 REPORTS = []
-
 
 # ---------- MODEL ----------
 class ReportIn(BaseModel):
@@ -47,35 +43,46 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
     yield
 
-
 app = FastAPI(lifespan=lifespan)
 
-
 # ---------- STATIC ----------
-STATIC_DIR = "static"
-if not os.path.exists(STATIC_DIR):
-    os.makedirs(STATIC_DIR)
+if not os.path.exists("static"):
+    os.makedirs("static")
 
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-
-# ---------- REGISTER ----------
+# ---------- REGISTER / PROFILE ----------
 @app.post("/register")
 async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
+    username = data.get("username", "unknown")
 
     if tg_id not in USERS:
         USERS[tg_id] = {
-            "role": "admin" if len(USERS) == 0 else "user"
+            "telegram_id": tg_id,
+            "username": username,
+            "role": "admin" if len(USERS) == 0 else "user",
+            "created_at": datetime.utcnow().isoformat()
         }
 
     return USERS[tg_id]
+
+
+@app.get("/me/{tg_id}")
+async def me(tg_id: str):
+    return USERS.get(tg_id, {"error": "not found"})
+
+
+@app.get("/users")
+async def users():
+    return USERS
 
 
 # ---------- REPORT ----------
 @app.post("/report")
 async def create_report(data: ReportIn):
 
+    # 🔥 правильная прибыль
     profit = float(data.sell_price) - float(data.purchase_price) - float(data.repair_cost)
 
     report = {
@@ -95,25 +102,23 @@ async def create_report(data: ReportIn):
     return {"ok": True, "profit": profit}
 
 
-# ---------- ANALYTICS (FIXED) ----------
+# ---------- ANALYTICS FIX ----------
 @app.get("/analytics")
 async def analytics():
 
     sales = [r for r in REPORTS if r["type"] == "sale"]
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
-    sales_profit = sum(
-        float(r["sell_price"]) - float(r["purchase_price"]) - float(r["repair_cost"])
-        for r in sales
-    )
+    sales_revenue = sum(r["sell_price"] for r in sales)
+    purchase_cost = sum(r["purchase_price"] for r in sales)
+    repair_cost = sum(r["repair_cost"] for r in REPORTS)
 
-    repairs_profit = sum(float(r["profit"]) for r in repairs)
-
-    total_profit = sales_profit + repairs_profit
+    total_profit = sum(r["profit"] for r in REPORTS)
 
     return {
-        "sales_profit": sales_profit,
-        "repairs_profit": repairs_profit,
+        "sales_revenue": sales_revenue,
+        "repair_cost": repair_cost,
+        "purchase_cost": purchase_cost,
         "total_profit": total_profit
     }
 
@@ -133,21 +138,10 @@ async def admin():
     }
 
 
-# ---------- HEALTH ----------
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", 8000))
 
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

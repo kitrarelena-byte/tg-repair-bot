@@ -2,7 +2,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>CRM</title>
 
@@ -12,37 +13,40 @@
 body {
     margin: 0;
     font-family: Arial;
-    background: #0f172a;
+    background: #0b1220;
     color: white;
+    overflow-x: hidden;
 }
 
-/* TOP MENU */
+/* TOP BAR */
 .tabbar {
     display: flex;
     overflow-x: auto;
-    gap: 10px;
+    white-space: nowrap;
+    background: #111827;
     padding: 10px;
-    background: #1e293b;
+    gap: 10px;
 }
 
 .tab {
     flex: 0 0 auto;
     padding: 10px 14px;
-    background: #0f172a;
+    background: #1f2937;
     border-radius: 10px;
     cursor: pointer;
 }
 
-/* CARD */
+/* CARDS */
+.container { padding: 15px; }
+
 .card {
-    margin: 10px;
+    background: #111827;
     padding: 15px;
-    background: #1e293b;
-    border-radius: 12px;
+    border-radius: 14px;
+    margin-bottom: 15px;
 }
 
-.hidden { display: none; }
-
+/* INPUTS */
 input, select {
     width: 100%;
     padding: 10px;
@@ -51,6 +55,7 @@ input, select {
     border: none;
 }
 
+/* BUTTON */
 button {
     margin-top: 10px;
     padding: 12px;
@@ -61,14 +66,24 @@ button {
     font-weight: bold;
 }
 
-.part-item {
-    display:flex;
-    justify-content:space-between;
-    padding:8px;
-    background:#0f172a;
-    margin-top:6px;
-    border-radius:8px;
+/* DELETE BTN */
+.del {
+    background: #ef4444;
+    margin-top: 5px;
 }
+
+/* LIST */
+li {
+    padding: 8px;
+    background: #1f2937;
+    margin-top: 5px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.hidden { display:none; }
+
+small { opacity:0.7; }
 </style>
 </head>
 
@@ -79,9 +94,11 @@ button {
     <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
     <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
     <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
-    <div class="tab" onclick="loadAdmin()">👤 Админ</div>
-    <div class="tab" onclick="loadProfile()">🙍 Профиль</div>
+    <div class="tab" onclick="loadProfile()">👤 Профиль</div>
+    <div class="tab" onclick="loadAdmin()">⚙️ Админ</div>
 </div>
+
+<div class="container">
 
 <!-- SALE -->
 <div id="sale" class="card">
@@ -91,7 +108,7 @@ button {
     <input id="sale_repair" placeholder="Цена ремонта">
     <input id="sale_sell" placeholder="Цена продажи">
     <button onclick="sendSale()">Сохранить</button>
-    <div id="sale_profit"></div>
+    <small id="sale_profit"></small>
 </div>
 
 <!-- REPAIR -->
@@ -109,169 +126,179 @@ button {
     <input id="part_name" placeholder="Название">
     <input id="part_price" placeholder="Цена">
     <button onclick="addPart()">Добавить</button>
-    <div id="parts_list"></div>
+    <ul id="parts_list"></ul>
 </div>
 
-<!-- OTHER -->
+<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
-<div id="admin" class="card hidden"></div>
+
+<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
 
+<!-- ADMIN -->
+<div id="admin" class="card hidden"></div>
+
+</div>
+
 <script>
+const tg = window.Telegram?.WebApp;
 
-let tg = null;
-
-try {
-    tg = window.Telegram?.WebApp;
-    tg?.ready();
-    tg?.expand();
-    tg?.disableVerticalSwipes?.();
-} catch(e){}
+if (tg) {
+    tg.ready();
+    tg.expand();
+}
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
-function safeUserId(){
+function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
 
-/* NAV */
-function showTab(tab){
-    ["sale","repair","parts","analytics","admin","profile"].forEach(id=>{
-        const el = document.getElementById(id);
-        if(el) el.classList.add("hidden");
-    });
-
-    const target = document.getElementById(tab);
-    if(target) target.classList.remove("hidden");
+function safeUsername() {
+    return tg?.initDataUnsafe?.user?.username || "no_username";
 }
 
-/* PARTS */
-function addPart(){
-    const name = document.getElementById("part_name").value;
-    const price = document.getElementById("part_price").value;
+/* ---------- TABS ---------- */
+function showTab(tab) {
+    ["sale","repair","parts","analytics","profile","admin"].forEach(id=>{
+        document.getElementById(id).classList.add("hidden");
+    });
 
-    if(!name || !price) return;
+    document.getElementById(tab).classList.remove("hidden");
+}
 
-    parts.push({name, price:Number(price)});
+/* ---------- PARTS ---------- */
+function addPart() {
+    parts.push({
+        name: part_name.value,
+        price: part_price.value
+    });
+
     localStorage.setItem("parts", JSON.stringify(parts));
     renderParts();
 }
 
-function renderParts(){
-    const list = document.getElementById("parts_list");
-    const select = document.getElementById("parts_select");
-
-    if(!list || !select) return;
-
-    list.innerHTML = "";
-    select.innerHTML = "";
+function renderParts() {
+    parts_list.innerHTML = "";
+    parts_select.innerHTML = "";
 
     parts.forEach((p,i)=>{
 
-        const div = document.createElement("div");
-        div.className = "part-item";
+        const li = document.createElement("li");
+        li.innerHTML = p.name + " - " + p.price;
 
-        div.innerHTML = `
-            <span>${p.name} - ${p.price}</span>
-            <button onclick="deletePart(${i})">❌</button>
-        `;
+        const del = document.createElement("button");
+        del.innerHTML = "Удалить";
+        del.className = "del";
+        del.onclick = ()=>{
+            parts.splice(i,1);
+            renderParts();
+        };
 
-        list.appendChild(div);
+        li.appendChild(del);
+        parts_list.appendChild(li);
 
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
-        select.appendChild(opt);
+
+        parts_select.appendChild(opt);
     });
 }
 
-function deletePart(i){
-    parts.splice(i,1);
-    localStorage.setItem("parts", JSON.stringify(parts));
-    renderParts();
-}
-
-/* SALE */
-async function sendSale(){
+/* ---------- SALE ---------- */
+async function sendSale() {
 
     const data = {
         telegram_id: safeUserId(),
         type: "sale",
-        model: document.getElementById("sale_model").value,
-        purchase_price: Number(document.getElementById("sale_purchase").value || 0),
-        repair_cost: Number(document.getElementById("sale_repair").value || 0),
-        sell_price: Number(document.getElementById("sale_sell").value || 0)
+        model: sale_model.value,
+        purchase_price: Number(sale_purchase.value),
+        repair_cost: Number(sale_repair.value),
+        sell_price: Number(sale_sell.value)
     };
 
-    const res = await fetch("/report",{
+    const r = await fetch("/report", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify(data)
     });
 
-    const r = await res.json();
-    document.getElementById("sale_profit").innerText = "💰 " + r.profit;
+    const res = await r.json();
+    sale_profit.innerText = "Profit: " + res.profit;
 }
 
-/* REPAIR */
-async function sendRepair(){
+/* ---------- REPAIR ---------- */
+async function sendRepair() {
+
+    const selected = [...parts_select.selectedOptions]
+        .map(o=>JSON.parse(o.value));
 
     let sum = 0;
+    selected.forEach(p=> sum += Number(p.price));
 
-    const selected = [...document.getElementById("parts_select").selectedOptions]
-        .map(o => JSON.parse(o.value));
-
-    selected.forEach(p => sum += Number(p.price));
-
-    await fetch("/report",{
+    await fetch("/report", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
             telegram_id: safeUserId(),
             type:"repair",
-            model: document.getElementById("repair_model").value,
+            model: repair_model.value,
             purchase_price:0,
-            repair_cost:Number(document.getElementById("repair_price").value || 0),
+            repair_cost: Number(repair_price.value) + sum,
             sell_price:0
         })
     });
 
-    alert("OK");
+    alert("Saved");
 }
 
-/* ANALYTICS */
-async function loadAnalytics(){
+/* ---------- ANALYTICS FIX ---------- */
+async function loadAnalytics() {
+
     showTab("analytics");
 
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    document.getElementById("analytics").innerHTML = `
-        <h3>📈 Аналитика</h3>
-        <p>Продажи: ${d.sales_profit}</p>
-        <p>Ремонты: ${d.repairs_profit}</p>
-        <p>Итого: ${d.total_profit}</p>
-    `;
+    analytics.innerHTML =
+    `<h3>Аналитика</h3>
+     <p>Продажи: ${d.sales_revenue}</p>
+     <p>Ремонты: ${d.repair_cost}</p>
+     <p>Закупка: ${d.purchase_cost}</p>
+     <p>Итого: ${d.total_profit}</p>`;
 }
 
-/* ADMIN */
-async function loadAdmin(){
+/* ---------- PROFILE ---------- */
+async function loadProfile() {
+
+    showTab("profile");
+
+    profile.innerHTML =
+    `<h3>Профиль</h3>
+     <p>ID: ${safeUserId()}</p>
+     <p>Username: ${safeUsername()}</p>`;
+}
+
+/* ---------- ADMIN ---------- */
+async function loadAdmin() {
+
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    document.getElementById("admin").innerHTML =
-        "<h3>👤 Админ</h3>" +
-        "<p>Users: " + Object.keys(d.users).length + "</p>" +
-        "<p>Reports: " + d.reports.length + "</p>";
-}
+    let usersHtml = "";
 
-/* PROFILE */
-function loadProfile(){
-    showTab("profile");
-    document.getElementById("profile").innerHTML =
-        "<h3>Профиль</h3><p>ID: " + safeUserId() + "</p>";
+    Object.values(d.users).forEach(u=>{
+        usersHtml += <p>${u.username} (${u.role})</p>;
+    });
+
+    admin.innerHTML =
+    `<h3>Админ</h3>
+     <h4>Пользователи</h4>
+     ${usersHtml}
+     <h4>Отчеты: ${d.reports.length}</h4>`;
 }
 
 renderParts();
