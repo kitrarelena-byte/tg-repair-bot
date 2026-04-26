@@ -62,6 +62,7 @@ button {
     <div class="tab" onclick="showTab('repair')">Ремонт</div>
     <div class="tab" onclick="showTab('parts')">Запчасти</div>
     <div class="tab" onclick="loadAnalytics()">Аналитика</div>
+    <div class="tab" onclick="loadReports()">Отчеты</div>
     <div class="tab" onclick="loadAdmin()">Админ</div>
 </div>
 
@@ -94,16 +95,14 @@ button {
 </div>
 
 <div id="analytics" class="card hidden"></div>
+<div id="reports" class="card hidden"></div>
 <div id="admin" class="card hidden"></div>
 
 </div>
 
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) {
-    tg.ready();
-    tg.expand();
-}
+if (tg) { tg.ready(); tg.expand(); }
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
@@ -111,6 +110,7 @@ function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
 
+// ---------- PARTS ----------
 function saveParts() {
     localStorage.setItem("parts", JSON.stringify(parts));
 }
@@ -124,7 +124,7 @@ function renderParts() {
 
     parts.forEach((p, i) => {
         const li = document.createElement("li");
-        li.innerText = p.name + " - " + p.price;
+        li.innerText = p.name + " - " + p.price + " ❌";
 
         li.onclick = () => {
             parts.splice(i,1);
@@ -150,6 +150,7 @@ function addPart() {
     renderParts();
 }
 
+// ---------- SALE ----------
 async function sendSale() {
     const res = await fetch("/report", {
         method: "POST",
@@ -165,9 +166,10 @@ async function sendSale() {
     });
 
     const r = await res.json();
-    document.getElementById("sale_profit").innerText = "Profit: " + r.profit;
+    document.getElementById("sale_profit").innerText = "Прибыль: " + r.profit;
 }
 
+// ---------- REPAIR ----------
 async function sendRepair() {
     const selected = Array.from(document.getElementById("parts_select").selectedOptions)
         .map(o => JSON.parse(o.value));
@@ -182,22 +184,22 @@ async function sendRepair() {
             telegram_id: safeUserId(),
             type: "repair",
             model: document.getElementById("repair_model").value,
-            purchase_price: 0,
-            repair_cost: Number(document.getElementById("repair_price").value) + partsSum,
-            sell_price: 0
+            repair_cost: Number(document.getElementById("repair_price").value) + partsSum
         })
     });
 
     alert("Сохранено");
 }
 
+// ---------- TABS ----------
 function showTab(tab) {
-    ["sale","repair","parts","analytics","admin"].forEach(id=>{
+    ["sale","repair","parts","analytics","admin","reports"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
     });
     document.getElementById(tab).classList.remove("hidden");
 }
 
+// ---------- ANALYTICS ----------
 async function loadAnalytics() {
     showTab("analytics");
 
@@ -206,21 +208,44 @@ async function loadAnalytics() {
 
     document.getElementById("analytics").innerHTML =
         "<h3>Аналитика</h3>" +
-        "<p>Общая прибыль: " + d.total_profit + "</p>" +
-        "<p>Продажи: " + d.sales_count + "</p>" +
-        "<p>Ремонты: " + d.repair_count + "</p>";
+        "<p>Продажи: " + d.sales_profit + "</p>" +
+        "<p>Ремонт: " + d.repairs_profit + "</p>" +
+        "<p>Общая: " + d.total_profit + "</p>";
 }
 
+// ---------- REPORTS ----------
+async function loadReports() {
+    showTab("reports");
+
+    const r = await fetch("/reports");
+    const data = await r.json();
+
+    let html = "<h3>Отчеты</h3>";
+
+    data.forEach(r => {
+        html += <p>${r.model} | ${r.type} | ${r.profit}</p>;
+    });
+
+    document.getElementById("reports").innerHTML = html;
+}
+
+// ---------- ADMIN ----------
 async function loadAdmin() {
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    document.getElementById("admin").innerHTML =
-        "<h3>Админ</h3>" +
-        "<p>Пользователей: " + Object.keys(d.users).length + "</p>" +
-        "<p>Отчетов: " + d.reports.length + "</p>";
+    let html = "<h3>Админ</h3>";
+
+    html += "<p>Пользователи:</p>";
+    Object.keys(d.users).forEach(u => {
+        html += <p>${u} (${d.users[u].role})</p>;
+    });
+
+    html += "<p>Отчеты: " + d.reports.length + "</p>";
+
+    document.getElementById("admin").innerHTML = html;
 }
 
 renderParts();

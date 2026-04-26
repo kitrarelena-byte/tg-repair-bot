@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -84,7 +84,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (РАСШИРЕННАЯ) ----------
+# ---------- АНАЛИТИКА (ИСПРАВЛЕНО) ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -101,7 +101,7 @@ async def analytics():
         "total_profit": total
     }
 
-# ---------- REPORT LIST ----------
+# ---------- СПИСОК ОТЧЕТОВ ----------
 @app.get("/reports")
 async def get_reports():
     return REPORTS
