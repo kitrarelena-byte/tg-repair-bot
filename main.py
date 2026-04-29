@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -49,11 +49,13 @@ if not os.path.exists("static"):
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# ---------- REGISTER ----------
+# ---------- REGISTER (FIX 405) ----------
 @app.post("/register")
-async def register(data: dict):
+async def register(request: Request):
+    data = await request.json()
+
     tg_id = str(data.get("telegram_id"))
-    username = data.get("username", "unknown")
+    username = data.get("username", "no_username")
 
     if tg_id not in USERS:
         USERS[tg_id] = {
@@ -87,7 +89,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (FIXED) ----------
+# ---------- ANALYTICS (FIX UNDEFINED) ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -99,6 +101,11 @@ async def analytics():
         "repairs_profit": sum(r["profit"] for r in repairs),
         "total_profit": sum(r["profit"] for r in REPORTS)
     }
+
+# ---------- REPORTS ----------
+@app.get("/reports")
+async def get_reports():
+    return REPORTS
 
 # ---------- ADMIN ----------
 @app.get("/admin")

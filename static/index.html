@@ -1,6 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>CRM</title>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0b1220;
+    color: white;
+}
+
+/* TOP BAR */
+.tabbar {
+    display: flex;
+    overflow-x: auto;
+    background: #111827;
+    padding: 10px;
+    gap: 10px;
+}
+
+.tab {
+    padding: 10px;
+    background: #1f2937;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* CARDS */
+.container { padding: 15px; }
+
+.card {
+    background: #111827;
+    padding: 15px;
+    border-radius: 14px;
+    margin-bottom: 15px;
+}
+
+input, select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: none;
+}
+
+button {
+    margin-top: 10px;
+    padding: 12px;
+    width: 100%;
+    border-radius: 10px;
+    border: none;
+    background: #22c55e;
+}
+
+.del {
+    background: red;
+}
+
+.hidden { display:none; }
+</style>
+</head>
+
+<body>
+
+<div class="tabbar">
+    <div class="tab" onclick="showTab('sale')">Продажа</div>
+    <div class="tab" onclick="showTab('repair')">Ремонт</div>
+    <div class="tab" onclick="showTab('parts')">Запчасти</div>
+    <div class="tab" onclick="loadAnalytics()">Аналитика</div>
+    <div class="tab" onclick="loadProfile()">Профиль</div>
+    <div class="tab" onclick="loadAdmin()">Админ</div>
+</div>
+
+<div class="container">
+
+<div id="sale" class="card">
+    <h3>Продажа</h3>
+    <input id="sale_model" placeholder="Модель">
+    <input id="sale_purchase" placeholder="Цена покупки">
+    <input id="sale_repair" placeholder="Цена ремонта">
+    <input id="sale_sell" placeholder="Цена продажи">
+    <button onclick="sendSale()">Сохранить</button>
+    <div id="sale_profit"></div>
+</div>
+
+<div id="repair" class="card hidden">
+    <h3>Ремонт</h3>
+    <input id="repair_model" placeholder="Модель">
+    <select id="parts_select" multiple></select>
+    <input id="repair_price" placeholder="Цена ремонта">
+    <button onclick="sendRepair()">Сохранить</button>
+</div>
+
+<div id="parts" class="card hidden">
+    <h3>Запчасти</h3>
+    <input id="part_name" placeholder="Название">
+    <input id="part_price" placeholder="Цена">
+    <button onclick="addPart()">Добавить</button>
+    <ul id="parts_list"></ul>
+</div>
+
+<div id="analytics" class="card hidden"></div>
+<div id="profile" class="card hidden"></div>
+<div id="admin" class="card hidden"></div>
+
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
-
 if (tg) {
     tg.ready();
     tg.expand();
@@ -8,25 +122,26 @@ if (tg) {
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
-/* ---------- USER ---------- */
+/* ---------- REGISTER FIX ---------- */
+async function registerUser() {
+    await fetch("/register", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            telegram_id: tg?.initDataUnsafe?.user?.id || "0",
+            username: tg?.initDataUnsafe?.user?.username || "no_username"
+        })
+    });
+}
+registerUser();
+
+/* ---------- SAFE ---------- */
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
 
 function safeUsername() {
     return tg?.initDataUnsafe?.user?.username || "no_username";
-}
-
-/* ---------- REGISTER FIX ---------- */
-async function registerUser() {
-    await fetch("/register", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-            telegram_id: safeUserId(),
-            username: safeUsername()
-        })
-    });
 }
 
 /* ---------- TABS ---------- */
@@ -37,23 +152,26 @@ function showTab(tab) {
     document.getElementById(tab).classList.remove("hidden");
 }
 
-/* ---------- PARTS ---------- */
+/* ---------- PARTS FIX ---------- */
 function renderParts() {
     const list = document.getElementById("parts_list");
     const select = document.getElementById("parts_select");
 
+    if (!list || !select) return;
+
     list.innerHTML = "";
     select.innerHTML = "";
 
-    parts.forEach((p, i) => {
+    parts.forEach((p,i)=>{
+
         const li = document.createElement("li");
-        li.innerText = p.name + " - " + p.price;
+        li.innerHTML = p.name + " - " + p.price;
 
         const del = document.createElement("button");
-        del.innerText = "Удалить";
+        del.innerText = "X";
         del.className = "del";
 
-        del.onclick = () => {
+        del.onclick = ()=>{
             parts.splice(i,1);
             localStorage.setItem("parts", JSON.stringify(parts));
             renderParts();
@@ -65,15 +183,14 @@ function renderParts() {
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
-
         select.appendChild(opt);
     });
 }
 
 function addPart() {
     parts.push({
-        name: document.getElementById("part_name").value,
-        price: document.getElementById("part_price").value
+        name: part_name.value,
+        price: part_price.value
     });
 
     localStorage.setItem("parts", JSON.stringify(parts));
@@ -82,13 +199,12 @@ function addPart() {
 
 /* ---------- SALE ---------- */
 async function sendSale() {
-
-    const res = await fetch("/report", {
+    const r = await fetch("/report", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
             telegram_id: safeUserId(),
-            type: "sale",
+            type:"sale",
             model: sale_model.value,
             purchase_price: Number(sale_purchase.value),
             repair_cost: Number(sale_repair.value),
@@ -96,18 +212,18 @@ async function sendSale() {
         })
     });
 
-    const r = await res.json();
-    sale_profit.innerText = "Profit: " + r.profit;
+    const res = await r.json();
+    sale_profit.innerText = "Profit: " + res.profit;
 }
 
 /* ---------- REPAIR ---------- */
 async function sendRepair() {
 
     const selected = [...parts_select.selectedOptions]
-        .map(o => JSON.parse(o.value));
+        .map(o=>JSON.parse(o.value));
 
     let sum = 0;
-    selected.forEach(p => sum += Number(p.price));
+    selected.forEach(p=> sum += Number(p.price));
 
     await fetch("/report", {
         method:"POST",
@@ -122,7 +238,7 @@ async function sendRepair() {
         })
     });
 
-    alert("Сохранено");
+    alert("Saved");
 }
 
 /* ---------- ANALYTICS FIX ---------- */
@@ -141,7 +257,7 @@ async function loadAnalytics() {
 }
 
 /* ---------- PROFILE ---------- */
-async function loadProfile() {
+function loadProfile() {
 
     showTab("profile");
 
@@ -169,10 +285,11 @@ async function loadAdmin() {
     `<h3>Админ</h3>
      <h4>Пользователи</h4>
      ${usersHtml}
-     <h4>Отчеты: ${d.reports.length}</h4>`;
+     <p>Отчетов: ${d.reports.length}</p>`;
 }
 
-/* ---------- INIT ---------- */
-registerUser();
 renderParts();
 </script>
+
+</body>
+</html>
