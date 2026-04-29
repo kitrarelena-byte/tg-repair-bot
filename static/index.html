@@ -1,145 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-<title>CRM</title>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<style>
-body {
-    margin: 0;
-    font-family: Arial;
-    background: #0b1220;
-    color: white;
-    overflow-x: hidden;
-}
-
-/* TOP BAR */
-.tabbar {
-    display: flex;
-    overflow-x: auto;
-    white-space: nowrap;
-    background: #111827;
-    padding: 10px;
-    gap: 10px;
-}
-
-.tab {
-    flex: 0 0 auto;
-    padding: 10px 14px;
-    background: #1f2937;
-    border-radius: 10px;
-    cursor: pointer;
-}
-
-/* CARDS */
-.container { padding: 15px; }
-
-.card {
-    background: #111827;
-    padding: 15px;
-    border-radius: 14px;
-    margin-bottom: 15px;
-}
-
-/* INPUTS */
-input, select {
-    width: 100%;
-    padding: 10px;
-    margin-top: 8px;
-    border-radius: 8px;
-    border: none;
-}
-
-/* BUTTON */
-button {
-    margin-top: 10px;
-    padding: 12px;
-    width: 100%;
-    border-radius: 10px;
-    border: none;
-    background: #22c55e;
-    font-weight: bold;
-}
-
-/* DELETE BTN */
-.del {
-    background: #ef4444;
-    margin-top: 5px;
-}
-
-/* LIST */
-li {
-    padding: 8px;
-    background: #1f2937;
-    margin-top: 5px;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.hidden { display:none; }
-
-small { opacity:0.7; }
-</style>
-</head>
-
-<body>
-
-<div class="tabbar">
-    <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
-    <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
-    <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
-    <div class="tab" onclick="loadProfile()">👤 Профиль</div>
-    <div class="tab" onclick="loadAdmin()">⚙️ Админ</div>
-</div>
-
-<div class="container">
-
-<!-- SALE -->
-<div id="sale" class="card">
-    <h3>Продажа</h3>
-    <input id="sale_model" placeholder="Модель">
-    <input id="sale_purchase" placeholder="Цена покупки">
-    <input id="sale_repair" placeholder="Цена ремонта">
-    <input id="sale_sell" placeholder="Цена продажи">
-    <button onclick="sendSale()">Сохранить</button>
-    <small id="sale_profit"></small>
-</div>
-
-<!-- REPAIR -->
-<div id="repair" class="card hidden">
-    <h3>Ремонт</h3>
-    <input id="repair_model" placeholder="Модель">
-    <select id="parts_select" multiple></select>
-    <input id="repair_price" placeholder="Цена ремонта">
-    <button onclick="sendRepair()">Сохранить</button>
-</div>
-
-<!-- PARTS -->
-<div id="parts" class="card hidden">
-    <h3>Запчасти</h3>
-    <input id="part_name" placeholder="Название">
-    <input id="part_price" placeholder="Цена">
-    <button onclick="addPart()">Добавить</button>
-    <ul id="parts_list"></ul>
-</div>
-
-<!-- ANALYTICS -->
-<div id="analytics" class="card hidden"></div>
-
-<!-- PROFILE -->
-<div id="profile" class="card hidden"></div>
-
-<!-- ADMIN -->
-<div id="admin" class="card hidden"></div>
-
-</div>
-
 <script>
 const tg = window.Telegram?.WebApp;
 
@@ -157,6 +15,19 @@ function safeUserId() {
 function safeUsername() {
     return tg?.initDataUnsafe?.user?.username || "no_username";
 }
+
+/* ---------- REGISTER AUTO ---------- */
+async function registerUser() {
+    await fetch("/register", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            telegram_id: safeUserId(),
+            username: safeUsername()
+        })
+    });
+}
+registerUser();
 
 /* ---------- TABS ---------- */
 function showTab(tab) {
@@ -190,8 +61,10 @@ function renderParts() {
         const del = document.createElement("button");
         del.innerHTML = "Удалить";
         del.className = "del";
+
         del.onclick = ()=>{
             parts.splice(i,1);
+            localStorage.setItem("parts", JSON.stringify(parts));
             renderParts();
         };
 
@@ -263,10 +136,9 @@ async function loadAnalytics() {
 
     analytics.innerHTML =
     `<h3>Аналитика</h3>
-     <p>Продажи: ${d.sales_revenue}</p>
-     <p>Ремонты: ${d.repair_cost}</p>
-     <p>Закупка: ${d.purchase_cost}</p>
-     <p>Итого: ${d.total_profit}</p>`;
+     <p>💰 Продажи: ${d.sales_profit}</p>
+     <p>🛠 Ремонты: ${d.repairs_profit}</p>
+     <p>📊 Итого: ${d.total_profit}</p>`;
 }
 
 /* ---------- PROFILE ---------- */
@@ -280,7 +152,7 @@ async function loadProfile() {
      <p>Username: ${safeUsername()}</p>`;
 }
 
-/* ---------- ADMIN ---------- */
+/* ---------- ADMIN FIX ---------- */
 async function loadAdmin() {
 
     showTab("admin");
@@ -291,7 +163,7 @@ async function loadAdmin() {
     let usersHtml = "";
 
     Object.values(d.users).forEach(u=>{
-        usersHtml += <p>${u.username} (${u.role})</p>;
+        usersHtml += `<p>${u.username} (${u.role})</p>`;
     });
 
     admin.innerHTML =
@@ -303,6 +175,3 @@ async function loadAdmin() {
 
 renderParts();
 </script>
-
-</body>
-</html>
