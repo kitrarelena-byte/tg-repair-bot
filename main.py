@@ -49,7 +49,7 @@ if not os.path.exists("static"):
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# ---------- REGISTER (FIX) ----------
+# ---------- REGISTER ----------
 @app.post("/register")
 async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
@@ -85,30 +85,20 @@ async def create_report(data: ReportIn):
 
     REPORTS.append(report)
 
-    logger.info(f"REPORT: {report}")
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (FIX) ----------
+# ---------- ANALYTICS (FIXED) ----------
 @app.get("/analytics")
 async def analytics():
 
     sales = [r for r in REPORTS if r["type"] == "sale"]
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
-    sales_profit = sum(r["profit"] for r in sales)
-    repairs_profit = sum(r["profit"] for r in repairs)
-    total = sales_profit + repairs_profit
-
     return {
-        "sales_profit": sales_profit,
-        "repairs_profit": repairs_profit,
-        "total_profit": total
+        "sales_profit": sum(r["profit"] for r in sales),
+        "repairs_profit": sum(r["profit"] for r in repairs),
+        "total_profit": sum(r["profit"] for r in REPORTS)
     }
-
-# ---------- REPORTS ----------
-@app.get("/reports")
-async def get_reports():
-    return REPORTS
 
 # ---------- ADMIN ----------
 @app.get("/admin")
