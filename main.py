@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -53,9 +53,12 @@ app.mount("/", StaticFiles(directory="static", html=True), name="static")
 @app.post("/register")
 async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
+    username = data.get("username", "unknown")
 
     if tg_id not in USERS:
         USERS[tg_id] = {
+            "id": tg_id,
+            "username": username,
             "role": "admin" if len(USERS) == 0 else "user",
             "created_at": datetime.utcnow().isoformat()
         }
@@ -82,19 +85,27 @@ async def create_report(data: ReportIn):
 
     REPORTS.append(report)
 
+    logger.info(f"REPORT ADDED: {report}")
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS FIX ----------
+# ---------- ✅ АНАЛИТИКА (ИСПРАВЛЕНО) ----------
 @app.get("/analytics")
 async def analytics():
 
     sales = [r for r in REPORTS if r["type"] == "sale"]
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
+    sales_profit = sum(r["profit"] for r in sales)
+    repairs_profit = sum(r["profit"] for r in repairs)
+
+    total = sales_profit + repairs_profit
+
+    logger.info(f"ANALYTICS: sales={sales_profit}, repairs={repairs_profit}, total={total}")
+
     return {
-        "sales_profit": sum(r["profit"] for r in sales),
-        "repairs_profit": sum(r["profit"] for r in repairs),
-        "total_profit": sum(r["profit"] for r in REPORTS)
+        "sales_profit": sales_profit,
+        "repairs_profit": repairs_profit,
+        "total_profit": total
     }
 
 # ---------- REPORTS ----------
@@ -102,7 +113,7 @@ async def analytics():
 async def get_reports():
     return REPORTS
 
-# ---------- ADMIN FIX ----------
+# ---------- ADMIN ----------
 @app.get("/admin")
 async def admin():
     return {
@@ -118,5 +129,4 @@ async def health():
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

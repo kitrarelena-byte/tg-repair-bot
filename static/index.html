@@ -242,14 +242,27 @@ async function sendRepair() {
 async function loadAnalytics() {
     showTab("analytics");
 
-    const r = await fetch("/analytics");
-    const d = await r.json();
+    try {
+        const r = await fetch("/analytics");
 
-    analytics.innerHTML =
-    `<h3>Аналитика</h3>
-     <p>Продажи: ${d.sales_profit}</p>
-     <p>Ремонты: ${d.repairs_profit}</p>
-     <p>Итого: ${d.total_profit}</p>`;
+        if (!r.ok) {
+            document.getElementById("analytics").innerHTML = "Ошибка API";
+            return;
+        }
+
+        const d = await r.json();
+
+        console.log("ANALYTICS:", d);
+
+        document.getElementById("analytics").innerHTML =
+        `<h3>Аналитика</h3>
+         <p>💰 Продажи: ${d.sales_profit || 0}</p>
+         <p>🛠 Ремонты: ${d.repairs_profit || 0}</p>
+         <p>📊 Итого: ${d.total_profit || 0}</p>`;
+
+    } catch (e) {
+        document.getElementById("analytics").innerHTML = "Ошибка загрузки";
+    }
 }
 
 /* ПРОФИЛЬ */
