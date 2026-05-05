@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC FIX ----------
+# ---------- STATIC ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
@@ -94,7 +94,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS FIX ----------
+# ---------- ANALYTICS (ИСПРАВЛЕНО) ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -102,14 +102,14 @@ async def analytics():
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
     sales_profit = sum(r["profit"] for r in sales)
-    repairs_income = sum(r["repair_cost"] for r in repairs)
-
-    total = sales_profit + repairs_income
+    repairs_profit = sum(r["profit"] for r in repairs)
 
     return {
         "sales_profit": sales_profit,
-        "repairs_income": repairs_income,
-        "total_profit": total
+        "repairs_profit": repairs_profit,
+        "total_profit": sales_profit + repairs_profit,
+        "sales_count": len(sales),
+        "repairs_count": len(repairs)
     }
 
 # ---------- REPORTS ----------
@@ -125,32 +125,38 @@ async def admin():
         "reports": REPORTS
     }
 
-# ---------- PARTS SEARCH (IPARTS + FALLBACK) ----------
+# ---------- IPARTS SEARCH (РАБОЧИЙ + FALLBACK) ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
+    url = f"https://iparts.by/search/?q={q}"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "ru-RU,ru;q=0.9"
+    }
+
     try:
-        url = f"https://iparts.by/search/?q={q}"
+        r = requests.get(url, headers=headers, timeout=5)
 
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
-        res = requests.get(url, headers=headers, timeout=5)
-
-        soup = BeautifulSoup(res.text, "lxml")
+        soup = BeautifulSoup(r.text, "lxml")
 
         items = []
 
-        for el in soup.select(".b-offer__wrap")[:5]:
-            name = el.select_one(".b-offer__name")
-            price = el.select_one(".b-offer__price")
+        for el in soup.select("a.b-offer__link")[:10]:
 
-            if name and price:
-                items.append({
-                    "name": name.text.strip(),
-                    "price": price.text.strip()
-                })
+            name = el.get_text(strip=True)
+
+            price_el = el.find_next("span", class_="b-offer__price")
+
+            price = price_el.get_text(strip=True) if price_el else "0"
+
+            price = "".join(filter(str.isdigit, price))
+
+            items.append({
+                "name": name,
+                "price": price
+            })
 
         if items:
             return {"items": items}
@@ -158,12 +164,11 @@ async def search_parts(q: str):
     except Exception as e:
         logger.error(f"iparts error: {e}")
 
-    # 🔥 fallback если iparts не дал данные
     return {
         "items": [
             {"name": f"{q} экран", "price": 120},
             {"name": f"{q} батарея", "price": 80},
-            {"name": f"{q} камера", "price": 150},
+            {"name": f"{q} камера", "price": 150}
         ]
     }
 

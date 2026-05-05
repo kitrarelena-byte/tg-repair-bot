@@ -2,8 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>CRM</title>
 
@@ -15,16 +14,17 @@ body { margin:0; font-family:Arial; background:#0b1220; color:white; }
 .tabbar {
     display:flex;
     overflow-x:auto;
+    gap:10px;
     background:#111827;
     padding:10px;
-    gap:10px;
 }
 
 .tab {
-    padding:10px;
     background:#1f2937;
+    padding:10px 14px;
     border-radius:10px;
     cursor:pointer;
+    flex:0 0 auto;
 }
 
 .container { padding:15px; }
@@ -51,9 +51,19 @@ button {
     border-radius:10px;
     border:none;
     background:#22c55e;
+    font-weight:bold;
 }
 
-.del { background:red; }
+.del {
+    background:#ef4444;
+}
+
+li {
+    background:#1f2937;
+    padding:8px;
+    margin-top:5px;
+    border-radius:8px;
+}
 
 .hidden { display:none; }
 </style>
@@ -62,49 +72,40 @@ button {
 <body>
 
 <div class="tabbar">
-    <div class="tab" onclick="showTab('sale')">Продажа</div>
-    <div class="tab" onclick="showTab('repair')">Ремонт</div>
-    <div class="tab" onclick="showTab('parts')">Запчасти</div>
-    <div class="tab" onclick="loadAnalytics()">Аналитика</div>
-    <div class="tab" onclick="loadProfile()">Профиль</div>
-    <div class="tab" onclick="loadAdmin()">Админ</div>
+    <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+    <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+    <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
+    <div class="tab" onclick="loadProfile()">👤 Профиль</div>
+    <div class="tab" onclick="loadAdmin()">⚙️ Админ</div>
 </div>
 
 <div class="container">
 
 <div id="sale" class="card">
-<h3>Продажа</h3>
-<input id="sale_model" placeholder="Модель">
-<input id="sale_purchase" placeholder="Цена покупки">
-<input id="sale_repair" placeholder="Цена ремонта">
-<input id="sale_sell" placeholder="Цена продажи">
-<button onclick="sendSale()">Сохранить</button>
-<div id="sale_profit"></div>
+    <h3>Продажа</h3>
+    <input id="sale_model" placeholder="Модель">
+    <input id="sale_purchase" placeholder="Цена покупки">
+    <input id="sale_repair" placeholder="Цена ремонта">
+    <input id="sale_sell" placeholder="Цена продажи">
+    <button onclick="sendSale()">Сохранить</button>
+    <small id="sale_profit"></small>
 </div>
 
 <div id="repair" class="card hidden">
-<h3>Ремонт</h3>
-<input id="repair_model">
-<select id="parts_select" multiple></select>
-<input id="repair_price">
-<button onclick="sendRepair()">Сохранить</button>
+    <h3>Ремонт</h3>
+    <input id="repair_model" placeholder="Модель">
+    <select id="parts_select" multiple></select>
+    <input id="repair_price" placeholder="Цена ремонта">
+    <button onclick="sendRepair()">Сохранить</button>
 </div>
 
 <div id="parts" class="card hidden">
-<h3>Запчасти</h3>
-
-<input id="part_name" placeholder="Название">
-<input id="part_price" placeholder="Цена">
-<button onclick="addPart()">Добавить</button>
-
-<hr>
-
-<input id="search_part" placeholder="Поиск iparts">
-<button onclick="searchParts()">Найти</button>
-
-<div id="search_results"></div>
-
-<ul id="parts_list"></ul>
+    <h3>Запчасти</h3>
+    <input id="part_name" placeholder="Название">
+    <input id="part_price" placeholder="Цена">
+    <button onclick="addPart()">Добавить</button>
+    <ul id="parts_list"></ul>
 </div>
 
 <div id="analytics" class="card hidden"></div>
@@ -115,181 +116,146 @@ button {
 
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+tg?.ready();
+tg?.expand();
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function safeUserId(){ return tg?.initDataUnsafe?.user?.id || "0"; }
-function safeUsername(){ return tg?.initDataUnsafe?.user?.username || "no_username"; }
+function safeUsername(){ return tg?.initDataUnsafe?.user?.username || "unknown"; }
 
-/* REGISTER */
-fetch("/register", {
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-telegram_id:safeUserId(),
-username:safeUsername()
-})
-});
-
-/* TABS */
 function showTab(tab){
-["sale","repair","parts","analytics","profile","admin"].forEach(id=>{
-document.getElementById(id).classList.add("hidden");
-});
-document.getElementById(tab).classList.remove("hidden");
+    ["sale","repair","parts","analytics","profile","admin"].forEach(id=>{
+        document.getElementById(id).classList.add("hidden");
+    });
+    document.getElementById(tab).classList.remove("hidden");
 }
 
 /* PARTS */
 function renderParts(){
-const list=document.getElementById("parts_list");
-const select=document.getElementById("parts_select");
-if(!list||!select)return;
+    parts_list.innerHTML="";
+    parts_select.innerHTML="";
 
-list.innerHTML="";
-select.innerHTML="";
+    parts.forEach((p,i)=>{
+        const li=document.createElement("li");
+        li.innerHTML=p.name+" - "+p.price;
 
-parts.forEach((p,i)=>{
-const li=document.createElement("li");
-li.innerText=p.name+" - "+p.price;
+        const del=document.createElement("button");
+        del.innerText="Удалить";
+        del.className="del";
+        del.onclick=()=>{
+            parts.splice(i,1);
+            localStorage.setItem("parts",JSON.stringify(parts));
+            renderParts();
+        };
 
-const del=document.createElement("button");
-del.innerText="Удалить";
-del.className="del";
-del.onclick=()=>{
-parts.splice(i,1);
-localStorage.setItem("parts",JSON.stringify(parts));
-renderParts();
-};
+        li.appendChild(del);
+        parts_list.appendChild(li);
 
-li.appendChild(del);
-list.appendChild(li);
-
-const opt=document.createElement("option");
-opt.value=JSON.stringify(p);
-opt.text=p.name;
-select.appendChild(opt);
-});
+        const opt=document.createElement("option");
+        opt.value=JSON.stringify(p);
+        opt.text=p.name;
+        parts_select.appendChild(opt);
+    });
 }
 
 function addPart(){
-parts.push({
-name:part_name.value,
-price:part_price.value
-});
-localStorage.setItem("parts",JSON.stringify(parts));
-renderParts();
-}
-
-/* IPARTS */
-async function searchParts(){
-const q=document.getElementById("search_part").value;
-const res=await fetch("/parts/search?q="+encodeURIComponent(q));
-const data=await res.json();
-
-const box=document.getElementById("search_results");
-box.innerHTML="";
-
-data.items.forEach(p=>{
-const div=document.createElement("div");
-
-div.innerHTML=
-"<b>"+p.name+"</b><br>"+p.price+
-"<br><button onclick='addFromSearch(\""+p.name+"\","+p.price+")'>Добавить</button>";
-
-box.appendChild(div);
-});
-}
-
-function addFromSearch(name,price){
-parts.push({name,price});
-localStorage.setItem("parts",JSON.stringify(parts));
-renderParts();
+    parts.push({name:part_name.value,price:part_price.value});
+    localStorage.setItem("parts",JSON.stringify(parts));
+    renderParts();
 }
 
 /* SALE */
 async function sendSale(){
-const res=await fetch("/report",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-telegram_id:safeUserId(),
-type:"sale",
-model:sale_model.value,
-purchase_price:Number(sale_purchase.value),
-repair_cost:Number(sale_repair.value),
-sell_price:Number(sale_sell.value)
-})
-});
-const r=await res.json();
-sale_profit.innerText="Profit: "+r.profit;
+    const res = await fetch("/report",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            telegram_id:safeUserId(),
+            type:"sale",
+            model:sale_model.value,
+            purchase_price:Number(sale_purchase.value),
+            repair_cost:Number(sale_repair.value),
+            sell_price:Number(sale_sell.value)
+        })
+    });
+
+    const r=await res.json();
+    sale_profit.innerText="Profit: "+r.profit;
+
+    await loadAnalytics();
 }
 
-/* REPAIR */
+/* REPAIR (FIXED) */
 async function sendRepair(){
-const selected=[...parts_select.selectedOptions].map(o=>JSON.parse(o.value));
-let sum=0;
-selected.forEach(p=>sum+=Number(p.price));
 
-await fetch("/report",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-telegram_id:safeUserId(),
-type:"repair",
-model:repair_model.value,
-purchase_price:0,
-repair_cost:Number(repair_price.value)+sum,
-sell_price:0
-})
-});
-alert("Сохранено");
+    const selected=[...parts_select.selectedOptions].map(o=>JSON.parse(o.value));
+
+    let sum=0;
+    selected.forEach(p=> sum+=Number(p.price));
+
+    await fetch("/report",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            telegram_id:safeUserId(),
+            type:"repair",
+            model:repair_model.value,
+            purchase_price:0,
+            repair_cost:sum,
+            sell_price:Number(repair_price.value)
+        })
+    });
+
+    alert("Сохранено");
+
+    await loadAnalytics();
 }
 
 /* ANALYTICS */
 async function loadAnalytics(){
-showTab("analytics");
-const r=await fetch("/analytics");
-const d=await r.json();
+    showTab("analytics");
 
-analytics.innerHTML=
-"<h3>Аналитика</h3>"+
-"<p>Продажи: "+(d.sales_revenue||0)+"</p>"+
-"<p>Ремонты: "+(d.repairs_revenue||0)+"</p>"+
-"<p>Оборот: "+(d.total_revenue||0)+"</p>"+
-"<p>Прибыль: "+(d.total_profit||0)+"</p>";
+    const r=await fetch("/analytics");
+    const d=await r.json();
+
+    analytics.innerHTML=
+    "<h3>Аналитика</h3>"+
+    "<p>Продажи: "+(d.sales_profit||0)+"</p>"+
+    "<p>Ремонт: "+(d.repairs_profit||0)+"</p>"+
+    "<p>Итого: "+(d.total_profit||0)+"</p>"+
+    "<p>Продаж: "+(d.sales_count||0)+"</p>"+
+    "<p>Ремонтов: "+(d.repairs_count||0)+"</p>";
 }
 
 /* PROFILE */
-async function loadProfile(){
-showTab("profile");
-const r=await fetch("/admin");
-const d=await r.json();
-const u=d.users[safeUserId()]||{};
+function loadProfile(){
+    showTab("profile");
 
-profile.innerHTML=
-"<h3>Профиль</h3>"+
-"<p>ID: "+safeUserId()+"</p>"+
-"<p>Username: "+(u.username||"-")+"</p>"+
-"<p>Role: "+(u.role||"-")+"</p>";
+    profile.innerHTML=
+    "<h3>Профиль</h3>"+
+    "<p>ID: "+safeUserId()+"</p>"+
+    "<p>Username: "+safeUsername()+"</p>";
 }
 
 /* ADMIN */
 async function loadAdmin(){
-showTab("admin");
-const r=await fetch("/admin");
-const d=await r.json();
+    showTab("admin");
 
-let users="";
-for(let id in d.users){
-let u=d.users[id];
-users+="<li>"+u.username+" ("+u.role+")</li>";
-}
+    const r=await fetch("/admin");
+    const d=await r.json();
 
-admin.innerHTML=
-"<h3>Админ</h3>"+
-"<ul>"+users+"</ul>"+
-"<p>Отчетов: "+d.reports.length+"</p>";
+    let users="";
+
+    Object.values(d.users).forEach(u=>{
+        users+="<p>"+u.username+" ("+u.role+")</p>";
+    });
+
+    admin.innerHTML=
+    "<h3>Админ</h3>"+
+    "<h4>Пользователи</h4>"+
+    users+
+    "<p>Отчетов: "+d.reports.length+"</p>";
 }
 
 renderParts();
