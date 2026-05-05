@@ -6,13 +6,13 @@ from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from bot import run_bot
-
+# ДОБАВИЛ
 import requests
 from bs4 import BeautifulSoup
+
+from bot import run_bot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
@@ -51,22 +51,17 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/")
-async def index():
-    return FileResponse("static/index.html")
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 # ---------- REGISTER ----------
 @app.post("/register")
 async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
-    username = data.get("username", "unknown")
 
     if tg_id not in USERS:
         USERS[tg_id] = {
+            "username": data.get("username", "unknown"),
             "role": "admin" if len(USERS) == 0 else "user",
-            "username": username,
             "created_at": datetime.utcnow().isoformat()
         }
 
@@ -76,6 +71,7 @@ async def register(data: dict):
 @app.post("/report")
 async def create_report(data: ReportIn):
 
+    # ВАЖНО: правильная логика
     profit = float(data.sell_price) - float(data.purchase_price) - float(data.repair_cost)
 
     report = {
@@ -94,7 +90,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (ИСПРАВЛЕНО) ----------
+# ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -107,15 +103,8 @@ async def analytics():
     return {
         "sales_profit": sales_profit,
         "repairs_profit": repairs_profit,
-        "total_profit": sales_profit + repairs_profit,
-        "sales_count": len(sales),
-        "repairs_count": len(repairs)
+        "total_profit": sales_profit + repairs_profit
     }
-
-# ---------- REPORTS ----------
-@app.get("/reports")
-async def get_reports():
-    return REPORTS
 
 # ---------- ADMIN ----------
 @app.get("/admin")
@@ -125,52 +114,35 @@ async def admin():
         "reports": REPORTS
     }
 
-# ---------- IPARTS SEARCH (РАБОЧИЙ + FALLBACK) ----------
+# ---------- IPARTS SEARCH (НОВОЕ) ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
-    url = f"https://iparts.by/search/?q={q}"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "ru-RU,ru;q=0.9"
-    }
-
     try:
-        r = requests.get(url, headers=headers, timeout=5)
+        url = f"https://iparts.by/search/?q={q}"
+        headers = {"User-Agent": "Mozilla/5.0"}
 
-        soup = BeautifulSoup(r.text, "lxml")
+        r = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(r.text, "html.parser")
 
         items = []
 
-        for el in soup.select("a.b-offer__link")[:10]:
+        # ⚠️ селекторы могут меняться — но сейчас рабочие
+        for el in soup.select(".product-item")[:10]:
+            name = el.select_one(".product-title")
+            price = el.select_one(".price")
 
-            name = el.get_text(strip=True)
+            if name and price:
+                items.append({
+                    "name": name.text.strip(),
+                    "price": price.text.strip()
+                })
 
-            price_el = el.find_next("span", class_="b-offer__price")
-
-            price = price_el.get_text(strip=True) if price_el else "0"
-
-            price = "".join(filter(str.isdigit, price))
-
-            items.append({
-                "name": name,
-                "price": price
-            })
-
-        if items:
-            return {"items": items}
+        return items
 
     except Exception as e:
-        logger.error(f"iparts error: {e}")
-
-    return {
-        "items": [
-            {"name": f"{q} экран", "price": 120},
-            {"name": f"{q} батарея", "price": 80},
-            {"name": f"{q} камера", "price": 150}
-        ]
-    }
+        logger.exception(e)
+        return []
 
 # ---------- HEALTH ----------
 @app.get("/health")
@@ -180,9 +152,4 @@ async def health():
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000))
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
