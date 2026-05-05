@@ -17,25 +17,21 @@ body {
     color: white;
 }
 
-/* TOP BAR */
 .tabbar {
     display: flex;
     overflow-x: auto;
-    white-space: nowrap;
     background: #111827;
     padding: 10px;
     gap: 10px;
 }
 
 .tab {
-    flex: 0 0 auto;
-    padding: 10px 14px;
+    padding: 10px;
     background: #1f2937;
     border-radius: 10px;
     cursor: pointer;
 }
 
-/* CARDS */
 .container { padding: 15px; }
 
 .card {
@@ -45,7 +41,6 @@ body {
     margin-bottom: 15px;
 }
 
-/* INPUTS */
 input, select {
     width: 100%;
     padding: 10px;
@@ -54,7 +49,6 @@ input, select {
     border: none;
 }
 
-/* BUTTON */
 button {
     margin-top: 10px;
     padding: 12px;
@@ -62,42 +56,29 @@ button {
     border-radius: 10px;
     border: none;
     background: #22c55e;
-    font-weight: bold;
 }
 
-/* DELETE BTN */
 .del {
     background: #ef4444;
 }
 
-/* LIST */
-li {
-    padding: 8px;
-    background: #1f2937;
-    margin-top: 5px;
-    border-radius: 8px;
-}
-
 .hidden { display:none; }
-
-small { opacity:0.7; }
 </style>
 </head>
 
 <body>
 
 <div class="tabbar">
-    <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
-    <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
-    <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-    <div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
-    <div class="tab" onclick="loadProfile()">👤 Профиль</div>
-    <div class="tab" onclick="loadAdmin()">⚙️ Админ</div>
+    <div class="tab" onclick="showTab('sale')">Продажа</div>
+    <div class="tab" onclick="showTab('repair')">Ремонт</div>
+    <div class="tab" onclick="showTab('parts')">Запчасти</div>
+    <div class="tab" onclick="loadAnalytics()">Аналитика</div>
+    <div class="tab" onclick="loadProfile()">Профиль</div>
+    <div class="tab" onclick="loadAdmin()">Админ</div>
 </div>
 
 <div class="container">
 
-<!-- SALE -->
 <div id="sale" class="card">
     <h3>Продажа</h3>
     <input id="sale_model" placeholder="Модель">
@@ -105,10 +86,9 @@ small { opacity:0.7; }
     <input id="sale_repair" placeholder="Цена ремонта">
     <input id="sale_sell" placeholder="Цена продажи">
     <button onclick="sendSale()">Сохранить</button>
-    <small id="sale_profit"></small>
+    <div id="sale_profit"></div>
 </div>
 
-<!-- REPAIR -->
 <div id="repair" class="card hidden">
     <h3>Ремонт</h3>
     <input id="repair_model" placeholder="Модель">
@@ -117,7 +97,6 @@ small { opacity:0.7; }
     <button onclick="sendRepair()">Сохранить</button>
 </div>
 
-<!-- PARTS -->
 <div id="parts" class="card hidden">
     <h3>Запчасти</h3>
 
@@ -125,35 +104,23 @@ small { opacity:0.7; }
     <input id="part_price" placeholder="Цена">
     <button onclick="addPart()">Добавить</button>
 
-    <h4>Поиск (iparts)</h4>
-    <input id="search_query" placeholder="Например: iPhone 11 дисплей">
+    <input id="search_query" placeholder="Поиск iparts">
     <button onclick="searchParts()">Найти</button>
 
     <div id="search_results"></div>
-
     <ul id="parts_list"></ul>
 </div>
 
-<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
-
-<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
-
-<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
 
 <script>
 const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
 
-if (tg) {
-    tg.ready();
-    tg.expand();
-}
-
-/* ---------- USER ---------- */
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
@@ -162,7 +129,6 @@ function safeUsername() {
     return tg?.initDataUnsafe?.user?.username || "no_username";
 }
 
-/* ---------- REGISTER ---------- */
 async function registerUser() {
     await fetch("/register", {
         method:"POST",
@@ -174,7 +140,6 @@ async function registerUser() {
     });
 }
 
-/* ---------- TABS ---------- */
 function showTab(tab) {
     ["sale","repair","parts","analytics","profile","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
@@ -182,7 +147,6 @@ function showTab(tab) {
     document.getElementById(tab).classList.remove("hidden");
 }
 
-/* ---------- PARTS ---------- */
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts() {
@@ -190,7 +154,6 @@ function saveParts() {
 }
 
 function renderParts() {
-
     const list = document.getElementById("parts_list");
     const select = document.getElementById("parts_select");
 
@@ -200,7 +163,6 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p,i)=>{
-
         const li = document.createElement("li");
         li.innerHTML = `${p.name} - ${p.price}`;
 
@@ -220,50 +182,34 @@ function renderParts() {
         const opt = document.createElement("option");
         opt.value = JSON.stringify(p);
         opt.text = p.name;
-
         select.appendChild(opt);
     });
 }
 
 function addPart() {
     parts.push({
-        name: document.getElementById("part_name").value,
-        price: document.getElementById("part_price").value
+        name: part_name.value,
+        price: part_price.value
     });
-
     saveParts();
     renderParts();
 }
 
-/* ---------- IPARTS ---------- */
 async function searchParts() {
-
-    const q = document.getElementById("search_query").value;
-
+    const q = search_query.value;
     const r = await fetch("/parts/search?q=" + encodeURIComponent(q));
     const data = await r.json();
 
-    const container = document.getElementById("search_results");
-    container.innerHTML = "";
+    search_results.innerHTML = "";
 
-    data.forEach(p => {
-
+    data.forEach(p=>{
         const div = document.createElement("div");
-
-        div.style.background = "#1f2937";
-        div.style.padding = "10px";
-        div.style.marginTop = "5px";
-        div.style.borderRadius = "8px";
-
         div.innerHTML = `
             <b>${p.name}</b><br>
             ${p.price}<br>
-            <button onclick='addFromSearch(${JSON.stringify(p)})'>
-                ➕ Добавить
-            </button>
+            <button onclick='addFromSearch(${JSON.stringify(p)})'>Добавить</button>
         `;
-
-        container.appendChild(div);
+        search_results.appendChild(div);
     });
 }
 
@@ -272,14 +218,11 @@ function addFromSearch(p) {
         name: p.name,
         price: parseFloat(p.price.replace(/[^\d]/g,""))
     });
-
     saveParts();
     renderParts();
 }
 
-/* ---------- SALE ---------- */
 async function sendSale() {
-
     const res = await fetch("/report", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -297,14 +240,11 @@ async function sendSale() {
     sale_profit.innerText = "Profit: " + r.profit;
 }
 
-/* ---------- REPAIR ---------- */
 async function sendRepair() {
+    const selected = [...parts_select.selectedOptions].map(o=>JSON.parse(o.value));
 
-    const selected = [...parts_select.selectedOptions]
-        .map(o=>JSON.parse(o.value));
-
-    let partsSum = 0;
-    selected.forEach(p => partsSum += Number(p.price));
+    let sum = 0;
+    selected.forEach(p=> sum += Number(p.price));
 
     await fetch("/report", {
         method:"POST",
@@ -314,7 +254,7 @@ async function sendRepair() {
             type:"repair",
             model: repair_model.value,
             purchase_price:0,
-            repair_cost: Number(repair_price.value) + partsSum,
+            repair_cost: Number(repair_price.value) + sum,
             sell_price:0
         })
     });
@@ -322,9 +262,7 @@ async function sendRepair() {
     alert("Сохранено");
 }
 
-/* ---------- ANALYTICS ---------- */
 async function loadAnalytics() {
-
     showTab("analytics");
 
     const r = await fetch("/analytics");
@@ -337,9 +275,7 @@ async function loadAnalytics() {
      <p><b>Итого: ${d.total_profit}</b></p>`;
 }
 
-/* ---------- PROFILE ---------- */
 function loadProfile() {
-
     showTab("profile");
 
     profile.innerHTML =
@@ -348,29 +284,25 @@ function loadProfile() {
      <p>Username: ${safeUsername()}</p>`;
 }
 
-/* ---------- ADMIN ---------- */
 async function loadAdmin() {
-
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    let usersHtml = "";
+    let users = "";
 
     for (let id in d.users) {
         const u = d.users[id];
-        usersHtml += `<p>${u.username} (${u.role})</p>`;
+        users += `<p>${u.username} (${u.role})</p>`;
     }
 
     admin.innerHTML =
     `<h3>Админ</h3>
-     <h4>Пользователи</h4>
-     ${usersHtml}
-     <h4>Отчеты: ${d.reports.length}</h4>`;
+     ${users}
+     <p>Отчетов: ${d.reports.length}</p>`;
 }
 
-/* ---------- INIT ---------- */
 registerUser();
 renderParts();
 </script>

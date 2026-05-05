@@ -6,14 +6,15 @@ from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# ДОБАВИЛ
 import requests
 from bs4 import BeautifulSoup
 
 from bot import run_bot
 
+# ---------- LOG ----------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
@@ -47,11 +48,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC ----------
+# ---------- FIX STATIC (ВАЖНО!) ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ---------- INDEX ----------
+@app.get("/")
+async def index():
+    return FileResponse("static/index.html")
 
 # ---------- REGISTER ----------
 @app.post("/register")
@@ -71,7 +77,6 @@ async def register(data: dict):
 @app.post("/report")
 async def create_report(data: ReportIn):
 
-    # ВАЖНО: правильная логика
     profit = float(data.sell_price) - float(data.purchase_price) - float(data.repair_cost)
 
     report = {
@@ -88,9 +93,11 @@ async def create_report(data: ReportIn):
 
     REPORTS.append(report)
 
+    logger.info(f"NEW REPORT: {report}")
+
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS ----------
+# ---------- ANALYTICS (ИСПРАВЛЕНО) ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -114,7 +121,7 @@ async def admin():
         "reports": REPORTS
     }
 
-# ---------- IPARTS SEARCH (НОВОЕ) ----------
+# ---------- IPARTS SEARCH ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -127,7 +134,6 @@ async def search_parts(q: str):
 
         items = []
 
-        # ⚠️ селекторы могут меняться — но сейчас рабочие
         for el in soup.select(".product-item")[:10]:
             name = el.select_one(".product-title")
             price = el.select_one(".price")
@@ -152,4 +158,11 @@ async def health():
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
+    port = int(os.getenv("PORT", 8000))
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port
+    )
