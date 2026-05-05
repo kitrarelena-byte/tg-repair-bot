@@ -14,12 +14,16 @@ from bot import run_bot
 # --- IPARTS ---
 import requests
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+
+# --- PLAYWRIGHT OPTIONAL ---
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except:
+    PLAYWRIGHT_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
-
-logger.info("🚀 MAIN STARTED")
 
 # ---------- BOT ----------
 async def safe_bot():
@@ -38,11 +42,11 @@ class ReportIn(BaseModel):
     telegram_id: str
     type: str
     model: str
-    purchase_price: float = 0   # запчасти
-    repair_cost: float = 0      # работа
+    purchase_price: float = 0
+    repair_cost: float = 0
     sell_price: float = 0
 
-# ---------- LIFESPAN ----------
+# ---------- APP ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
@@ -50,7 +54,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC (ВАЖНО НЕ ЛОМАТЬ API) ----------
+# ---------- STATIC (НЕ ЛОМАЕМ API) ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
@@ -82,7 +86,6 @@ async def create_report(data: ReportIn):
         profit = data.sell_price - data.purchase_price - data.repair_cost
 
     elif data.type == "repair":
-        # прибыль = работа - запчасти
         profit = data.repair_cost - data.purchase_price
 
     else:
@@ -117,7 +120,7 @@ async def analytics():
         "total_profit": sum(r["profit"] for r in REPORTS)
     }
 
-# ---------- REPORT LIST ----------
+# ---------- REPORTS ----------
 @app.get("/reports")
 async def get_reports():
     return REPORTS
@@ -135,7 +138,7 @@ async def admin():
 async def health():
     return {"status": "ok"}
 
-# ---------- IPARTS SEARCH (REQUESTS + PLAYWRIGHT) ----------
+# ---------- IPARTS SEARCH ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -177,44 +180,44 @@ async def search_parts(q: str):
     except Exception as e:
         logger.warning("requests failed")
 
-    # ---------- 2. PLAYWRIGHT ----------
-    try:
-        async with async_playwright() as p:
+    # ---------- 2. PLAYWRIGHT (ЕСЛИ ЕСТЬ) ----------
+    if PLAYWRIGHT_AVAILABLE:
+        try:
+            async with async_playwright() as p:
 
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
 
-            await page.goto(f"https://iparts.by/search/?q={q}", timeout=60000)
+                await page.goto(f"https://iparts.by/search/?q={q}", timeout=60000)
+                await page.wait_for_timeout(3000)
 
-            await page.wait_for_timeout(3000)
+                elements = await page.query_selector_all("div")
 
-            elements = await page.query_selector_all("div")
+                items = []
 
-            items = []
+                for el in elements:
+                    text = await el.inner_text()
 
-            for el in elements:
-                text = await el.inner_text()
+                    if "BYN" in text and len(text) < 200:
+                        lines = text.split("\n")
 
-                if "BYN" in text and len(text) < 200:
-                    lines = text.split("\n")
+                        if len(lines) >= 2:
+                            items.append({
+                                "name": lines[0],
+                                "price": lines[-1]
+                            })
 
-                    if len(lines) >= 2:
-                        items.append({
-                            "name": lines[0],
-                            "price": lines[-1]
-                        })
+                    if len(items) >= 10:
+                        break
 
-                if len(items) >= 10:
-                    break
+                await browser.close()
 
-            await browser.close()
+                if items:
+                    CACHE[q] = items
+                    return items
 
-            if items:
-                CACHE[q] = items
-                return items
-
-    except Exception as e:
-        logger.exception(e)
+        except Exception as e:
+            logger.exception(e)
 
     # ---------- 3. FALLBACK ----------
     return [
@@ -227,8 +230,4 @@ if __name__ == "__main__":
 
     port = int(os.getenv("PORT", 8000))
 
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
