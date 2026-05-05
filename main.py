@@ -118,6 +118,35 @@ async def admin():
 async def health():
     return {"status": "ok"}
 
+# ---------- IPARTS SEARCH ----------
+@app.get("/parts/search")
+async def search_parts(q: str):
+
+    import requests
+    from bs4 import BeautifulSoup
+
+    url = f"https://iparts.by/search/?q={q}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    r = requests.get(url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    results = []
+
+    items = soup.select(".product-item")[:5]
+
+    for item in items:
+        title = item.select_one(".product-title")
+        price = item.select_one(".price")
+
+        if title and price:
+            results.append({
+                "name": title.text.strip(),
+                "price": float(''.join(filter(str.isdigit, price.text)) or 0)
+            })
+
+    return {"items": results}
+
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
