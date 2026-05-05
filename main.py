@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from playwright.async_api import async_playwright
 
 from bot import run_bot
 
@@ -132,8 +133,8 @@ async def admin():
 async def health():
     return {"status": "ok"}
 
-# ---------- IPARTS ПОИСК ----------
 # ---------- IPARTS SEARCH (УЛУЧШЕННЫЙ + КЕШ) ----------
+
 CACHE = {}
 
 @app.get("/parts/search")
@@ -141,68 +142,85 @@ async def search_parts(q: str):
 
     q = q.strip().lower()
 
-    # 🔥 кеш на 5 минут
     if q in CACHE:
         return CACHE[q]
 
+    # ---------- 1. ПРОБУЕМ REQUESTS ----------
     try:
         url = f"https://iparts.by/search/?q={q}"
 
         headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "ru-RU,ru;q=0.9"
+            "User-Agent": "Mozilla/5.0"
         }
 
-        r = requests.get(url, headers=headers, timeout=10)
+        r = requests.get(url, headers=headers, timeout=5)
 
-        html = r.text
-
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(r.text, "html.parser")
 
         items = []
 
-        # 🔥 более точный парсинг
-        for el in soup.find_all(["div","a","span"]):
-
+        for el in soup.find_all("div"):
             text = el.get_text(" ", strip=True)
 
-            # ищем строки с ценой
             if "BYN" in text and len(text) < 150:
+                items.append({
+                    "name": text[:80],
+                    "price": text.split()[-1]
+                })
 
-                parts = text.split("BYN")
-
-                if len(parts) >= 1:
-                    name = parts[0].strip()
-                    price = parts[-1].strip()
-
-                    if len(name) > 5:
-                        items.append({
-                            "name": name[:80],
-                            "price": price.replace("≈","").strip()
-                        })
-
-            if len(items) >= 10:
+            if len(items) >= 5:
                 break
 
-        # 🔥 если iparts не дал данные
-        if not items:
-            items = [{
-                "name": f"{q} (не удалось получить с iparts)",
-                "price": "—"
-            }]
+        if items:
+            CACHE[q] = items
+            return items
 
-        # сохраняем в кеш
-        CACHE[q] = items
+    except:
+        pass
 
-        return items
+    # ---------- 2. FALLBACK → PLAYWRIGHT ----------
+    try:
+        async with async_playwright() as p:
+
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+
+            await page.goto(f"https://iparts.by/search/?q={q}", timeout=60000)
+
+            await page.wait_for_timeout(3000)
+
+            elements = await page.query_selector_all("div")
+
+            items = []
+
+            for el in elements:
+                text = await el.inner_text()
+
+                if "BYN" in text and len(text) < 200:
+                    lines = text.split("\n")
+
+                    if len(lines) >= 2:
+                        items.append({
+                            "name": lines[0],
+                            "price": lines[-1]
+                        })
+
+                if len(items) >= 10:
+                    break
+
+            await browser.close()
+
+            if items:
+                CACHE[q] = items
+                return items
 
     except Exception as e:
         logger.exception(e)
 
-        return [{
-            "name": f"{q} (ошибка загрузки)",
-            "price": "—"
-        }]
+    # ---------- 3. ЕСЛИ ВСЁ УПАЛО ----------
+    return [
+        {"name": f"{q} (iparts заблокировал запрос)", "price": "—"}
+    ]
 
 # ---------- RUN ----------
 if __name__ == "__main__":
