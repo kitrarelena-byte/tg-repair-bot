@@ -6,6 +6,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from bot import run_bot
@@ -14,7 +15,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 logger.info("🚀 MAIN STARTED")
-print("🔥 THIS IS NEW MAIN")
 
 # ---------- BOT ----------
 async def safe_bot():
@@ -44,11 +44,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC ----------
+# ---------- STATIC FIX ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# ❗ ВАЖНО: больше НЕ монтируем на "/"
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 👉 главная страница
+@app.get("/")
+async def index():
+    return FileResponse("static/index.html")
 
 # ---------- REGISTER ----------
 @app.post("/register")
@@ -87,7 +93,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (FIXED) ----------
+# ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -119,36 +125,12 @@ async def admin():
 async def health():
     return {"status": "ok"}
 
-# ---------- IPARTS SEARCH ----------
-@app.get("/parts/search")
-async def search_parts(q: str):
-
-    import requests
-    from bs4 import BeautifulSoup
-
-    url = f"https://iparts.by/search/?q={q}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    results = []
-
-    items = soup.select(".product-item")[:5]
-
-    for item in items:
-        title = item.select_one(".product-title")
-        price = item.select_one(".price")
-
-        if title and price:
-            results.append({
-                "name": title.text.strip(),
-                "price": float(''.join(filter(str.isdigit, price.text)) or 0)
-            })
-
-    return {"items": results}
-
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000))
+    )
