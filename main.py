@@ -8,16 +8,18 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from playwright.async_api import async_playwright
 
 from bot import run_bot
 
-# --- ДЛЯ IPARTS ---
+# --- IPARTS ---
 import requests
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
+
+logger.info("🚀 MAIN STARTED")
 
 # ---------- BOT ----------
 async def safe_bot():
@@ -29,6 +31,7 @@ async def safe_bot():
 # ---------- STORAGE ----------
 USERS = {}
 REPORTS = []
+CACHE = {}
 
 # ---------- MODEL ----------
 class ReportIn(BaseModel):
@@ -39,7 +42,7 @@ class ReportIn(BaseModel):
     repair_cost: float = 0      # работа
     sell_price: float = 0
 
-# ---------- APP ----------
+# ---------- LIFESPAN ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
@@ -47,7 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC (ВАЖНО: НЕ ЛОМАЕМ) ----------
+# ---------- STATIC (ВАЖНО НЕ ЛОМАТЬ API) ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
@@ -57,7 +60,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def index():
     return FileResponse("static/index.html")
 
-# ---------- REGISTER (ИСПРАВЛЕНО 405) ----------
+# ---------- REGISTER ----------
 @app.post("/register")
 async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
@@ -75,12 +78,11 @@ async def register(data: dict):
 @app.post("/report")
 async def create_report(data: ReportIn):
 
-    # 🔥 ЛОГИКА ПРИБЫЛИ (ИСПРАВЛЕНО)
     if data.type == "sale":
         profit = data.sell_price - data.purchase_price - data.repair_cost
 
     elif data.type == "repair":
-        # ремонт = заработал на работе - потратил на запчасти
+        # прибыль = работа - запчасти
         profit = data.repair_cost - data.purchase_price
 
     else:
@@ -102,7 +104,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (ИСПРАВЛЕНО undefined) ----------
+# ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -128,15 +130,12 @@ async def admin():
         "reports": REPORTS
     }
 
-# ---------- HEALTH (чтобы Railway не орал) ----------
+# ---------- HEALTH ----------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-# ---------- IPARTS SEARCH (УЛУЧШЕННЫЙ + КЕШ) ----------
-
-CACHE = {}
-
+# ---------- IPARTS SEARCH (REQUESTS + PLAYWRIGHT) ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -145,7 +144,7 @@ async def search_parts(q: str):
     if q in CACHE:
         return CACHE[q]
 
-    # ---------- 1. ПРОБУЕМ REQUESTS ----------
+    # ---------- 1. REQUESTS ----------
     try:
         url = f"https://iparts.by/search/?q={q}"
 
@@ -175,10 +174,10 @@ async def search_parts(q: str):
             CACHE[q] = items
             return items
 
-    except:
-        pass
+    except Exception as e:
+        logger.warning("requests failed")
 
-    # ---------- 2. FALLBACK → PLAYWRIGHT ----------
+    # ---------- 2. PLAYWRIGHT ----------
     try:
         async with async_playwright() as p:
 
@@ -217,17 +216,19 @@ async def search_parts(q: str):
     except Exception as e:
         logger.exception(e)
 
-    # ---------- 3. ЕСЛИ ВСЁ УПАЛО ----------
+    # ---------- 3. FALLBACK ----------
     return [
-        {"name": f"{q} (iparts заблокировал запрос)", "price": "—"}
+        {"name": f"{q} (iparts не дал данные)", "price": "—"}
     ]
 
 # ---------- RUN ----------
 if __name__ == "__main__":
     import uvicorn
 
+    port = int(os.getenv("PORT", 8000))
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000))
+        port=port
     )
