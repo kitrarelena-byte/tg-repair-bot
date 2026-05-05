@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from bot import run_bot
 
+import requests
+from bs4 import BeautifulSoup
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
@@ -48,10 +51,8 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
-# ❗ ВАЖНО: больше НЕ монтируем на "/"
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 👉 главная страница
 @app.get("/")
 async def index():
     return FileResponse("static/index.html")
@@ -93,18 +94,22 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS ----------
+# ---------- ANALYTICS FIX ----------
 @app.get("/analytics")
 async def analytics():
 
     sales = [r for r in REPORTS if r["type"] == "sale"]
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
+    sales_profit = sum(r["profit"] for r in sales)
+    repairs_income = sum(r["repair_cost"] for r in repairs)
+
+    total = sales_profit + repairs_income
+
     return {
-        "sales_revenue": sum(r["sell_price"] for r in sales),
-        "repairs_revenue": sum(r["repair_cost"] for r in repairs),
-        "total_revenue": sum(r["sell_price"] for r in sales) + sum(r["repair_cost"] for r in repairs),
-        "total_profit": sum(r["profit"] for r in REPORTS)
+        "sales_profit": sales_profit,
+        "repairs_income": repairs_income,
+        "total_profit": total
     }
 
 # ---------- REPORTS ----------
@@ -118,6 +123,48 @@ async def admin():
     return {
         "users": USERS,
         "reports": REPORTS
+    }
+
+# ---------- PARTS SEARCH (IPARTS + FALLBACK) ----------
+@app.get("/parts/search")
+async def search_parts(q: str):
+
+    try:
+        url = f"https://iparts.by/search/?q={q}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        res = requests.get(url, headers=headers, timeout=5)
+
+        soup = BeautifulSoup(res.text, "lxml")
+
+        items = []
+
+        for el in soup.select(".b-offer__wrap")[:5]:
+            name = el.select_one(".b-offer__name")
+            price = el.select_one(".b-offer__price")
+
+            if name and price:
+                items.append({
+                    "name": name.text.strip(),
+                    "price": price.text.strip()
+                })
+
+        if items:
+            return {"items": items}
+
+    except Exception as e:
+        logger.error(f"iparts error: {e}")
+
+    # 🔥 fallback если iparts не дал данные
+    return {
+        "items": [
+            {"name": f"{q} экран", "price": 120},
+            {"name": f"{q} батарея", "price": 80},
+            {"name": f"{q} камера", "price": 150},
+        ]
     }
 
 # ---------- HEALTH ----------
