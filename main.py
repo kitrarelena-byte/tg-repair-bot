@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 logger.info("🚀 MAIN STARTED")
+print("🔥 THIS IS NEW MAIN")
 
 # ---------- BOT ----------
 async def safe_bot():
