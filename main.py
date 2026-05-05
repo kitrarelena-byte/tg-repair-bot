@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -49,19 +49,16 @@ if not os.path.exists("static"):
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-# ---------- REGISTER (FIX 405) ----------
+# ---------- REGISTER ----------
 @app.post("/register")
-async def register(request: Request):
-    data = await request.json()
-
+async def register(data: dict):
     tg_id = str(data.get("telegram_id"))
-    username = data.get("username", "no_username")
+    username = data.get("username", "unknown")
 
     if tg_id not in USERS:
         USERS[tg_id] = {
-            "id": tg_id,
-            "username": username,
             "role": "admin" if len(USERS) == 0 else "user",
+            "username": username,
             "created_at": datetime.utcnow().isoformat()
         }
 
@@ -89,7 +86,7 @@ async def create_report(data: ReportIn):
 
     return {"ok": True, "profit": profit}
 
-# ---------- ANALYTICS (FIX UNDEFINED) ----------
+# ---------- ANALYTICS (FIXED) ----------
 @app.get("/analytics")
 async def analytics():
 
@@ -97,8 +94,9 @@ async def analytics():
     repairs = [r for r in REPORTS if r["type"] == "repair"]
 
     return {
-        "sales_profit": sum(r["profit"] for r in sales),
-        "repairs_profit": sum(r["profit"] for r in repairs),
+        "sales_revenue": sum(r["sell_price"] for r in sales),
+        "repairs_revenue": sum(r["repair_cost"] for r in repairs),
+        "total_revenue": sum(r["sell_price"] for r in sales) + sum(r["repair_cost"] for r in repairs),
         "total_profit": sum(r["profit"] for r in REPORTS)
     }
 

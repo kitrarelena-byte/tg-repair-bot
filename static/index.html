@@ -17,7 +17,6 @@ body {
     color: white;
 }
 
-/* TOP BAR */
 .tabbar {
     display: flex;
     overflow-x: auto;
@@ -33,7 +32,6 @@ body {
     cursor: pointer;
 }
 
-/* CARDS */
 .container { padding: 15px; }
 
 .card {
@@ -122,20 +120,6 @@ if (tg) {
 
 let parts = JSON.parse(localStorage.getItem("parts") || "[]");
 
-/* ---------- REGISTER FIX ---------- */
-async function registerUser() {
-    await fetch("/register", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-            telegram_id: tg?.initDataUnsafe?.user?.id || "0",
-            username: tg?.initDataUnsafe?.user?.username || "no_username"
-        })
-    });
-}
-registerUser();
-
-/* ---------- SAFE ---------- */
 function safeUserId() {
     return tg?.initDataUnsafe?.user?.id || "0";
 }
@@ -144,7 +128,19 @@ function safeUsername() {
     return tg?.initDataUnsafe?.user?.username || "no_username";
 }
 
-/* ---------- TABS ---------- */
+/* REGISTER */
+async function registerUser() {
+    await fetch("/register", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+            telegram_id: safeUserId(),
+            username: safeUsername()
+        })
+    });
+}
+
+/* TABS */
 function showTab(tab) {
     ["sale","repair","parts","analytics","profile","admin"].forEach(id=>{
         document.getElementById(id).classList.add("hidden");
@@ -152,7 +148,7 @@ function showTab(tab) {
     document.getElementById(tab).classList.remove("hidden");
 }
 
-/* ---------- PARTS FIX ---------- */
+/* PARTS */
 function renderParts() {
     const list = document.getElementById("parts_list");
     const select = document.getElementById("parts_select");
@@ -163,14 +159,12 @@ function renderParts() {
     select.innerHTML = "";
 
     parts.forEach((p,i)=>{
-
         const li = document.createElement("li");
-        li.innerHTML = p.name + " - " + p.price;
+        li.innerText = p.name + " - " + p.price;
 
         const del = document.createElement("button");
-        del.innerText = "X";
+        del.innerText = "Удалить";
         del.className = "del";
-
         del.onclick = ()=>{
             parts.splice(i,1);
             localStorage.setItem("parts", JSON.stringify(parts));
@@ -189,17 +183,17 @@ function renderParts() {
 
 function addPart() {
     parts.push({
-        name: part_name.value,
-        price: part_price.value
+        name: document.getElementById("part_name").value,
+        price: document.getElementById("part_price").value
     });
 
     localStorage.setItem("parts", JSON.stringify(parts));
     renderParts();
 }
 
-/* ---------- SALE ---------- */
+/* SALE */
 async function sendSale() {
-    const r = await fetch("/report", {
+    const res = await fetch("/report", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
@@ -212,15 +206,13 @@ async function sendSale() {
         })
     });
 
-    const res = await r.json();
-    sale_profit.innerText = "Profit: " + res.profit;
+    const r = await res.json();
+    sale_profit.innerText = "Profit: " + r.profit;
 }
 
-/* ---------- REPAIR ---------- */
+/* REPAIR */
 async function sendRepair() {
-
-    const selected = [...parts_select.selectedOptions]
-        .map(o=>JSON.parse(o.value));
+    const selected = [...parts_select.selectedOptions].map(o=>JSON.parse(o.value));
 
     let sum = 0;
     selected.forEach(p=> sum += Number(p.price));
@@ -238,56 +230,61 @@ async function sendRepair() {
         })
     });
 
-    alert("Saved");
+    alert("Сохранено");
 }
 
-/* ---------- ANALYTICS FIX ---------- */
+/* ANALYTICS */
 async function loadAnalytics() {
-
     showTab("analytics");
 
     const r = await fetch("/analytics");
     const d = await r.json();
 
-    analytics.innerHTML =
-    `<h3>Аналитика</h3>
-     <p>Продажи: ${d.sales_profit}</p>
-     <p>Ремонты: ${d.repairs_profit}</p>
-     <p>Итого: ${d.total_profit}</p>`;
+    document.getElementById("analytics").innerHTML =
+    "<h3>Аналитика</h3>" +
+    "<p>Продажи: " + d.sales_revenue + "</p>" +
+    "<p>Ремонты: " + d.repairs_revenue + "</p>" +
+    "<p>Оборот: " + d.total_revenue + "</p>" +
+    "<p>Прибыль: " + d.total_profit + "</p>";
 }
 
-/* ---------- PROFILE ---------- */
-function loadProfile() {
-
+/* PROFILE */
+async function loadProfile() {
     showTab("profile");
 
-    profile.innerHTML =
-    `<h3>Профиль</h3>
-     <p>ID: ${safeUserId()}</p>
-     <p>Username: ${safeUsername()}</p>`;
+    const r = await fetch("/admin");
+    const d = await r.json();
+
+    const user = d.users[safeUserId()];
+
+    document.getElementById("profile").innerHTML =
+    "<h3>Профиль</h3>" +
+    "<p>ID: " + safeUserId() + "</p>" +
+    "<p>Username: " + (user?.username || "-") + "</p>" +
+    "<p>Role: " + (user?.role || "-") + "</p>";
 }
 
-/* ---------- ADMIN FIX ---------- */
+/* ADMIN */
 async function loadAdmin() {
-
     showTab("admin");
 
     const r = await fetch("/admin");
     const d = await r.json();
 
-    let usersHtml = "";
+    let users = "";
+    for (let id in d.users) {
+        const u = d.users[id];
+        users += "<li>" + u.username + " (" + u.role + ")</li>";
+    }
 
-    Object.values(d.users).forEach(u=>{
-        usersHtml += `<p>${u.username} (${u.role})</p>`;
-    });
-
-    admin.innerHTML =
-    `<h3>Админ</h3>
-     <h4>Пользователи</h4>
-     ${usersHtml}
-     <p>Отчетов: ${d.reports.length}</p>`;
+    document.getElementById("admin").innerHTML =
+    "<h3>Админ</h3>" +
+    "<ul>" + users + "</ul>" +
+    "<p>Отчетов: " + d.reports.length + "</p>";
 }
 
+/* INIT */
+registerUser();
 renderParts();
 </script>
 
