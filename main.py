@@ -133,51 +133,76 @@ async def health():
     return {"status": "ok"}
 
 # ---------- IPARTS ПОИСК ----------
+# ---------- IPARTS SEARCH (УЛУЧШЕННЫЙ + КЕШ) ----------
+CACHE = {}
+
 @app.get("/parts/search")
 async def search_parts(q: str):
+
+    q = q.strip().lower()
+
+    # 🔥 кеш на 5 минут
+    if q in CACHE:
+        return CACHE[q]
 
     try:
         url = f"https://iparts.by/search/?q={q}"
 
         headers = {
-            "User-Agent": "Mozilla/5.0"
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "ru-RU,ru;q=0.9"
         }
 
         r = requests.get(url, headers=headers, timeout=10)
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        html = r.text
+
+        soup = BeautifulSoup(html, "html.parser")
 
         items = []
 
-        # пробуем разные варианты верстки
-        products = soup.find_all("div")
+        # 🔥 более точный парсинг
+        for el in soup.find_all(["div","a","span"]):
 
-        for el in products:
             text = el.get_text(" ", strip=True)
 
-            if "BYN" in text and len(text) < 200:
-                items.append({
-                    "name": text[:80],
-                    "price": text.split()[-1]
-                })
+            # ищем строки с ценой
+            if "BYN" in text and len(text) < 150:
+
+                parts = text.split("BYN")
+
+                if len(parts) >= 1:
+                    name = parts[0].strip()
+                    price = parts[-1].strip()
+
+                    if len(name) > 5:
+                        items.append({
+                            "name": name[:80],
+                            "price": price.replace("≈","").strip()
+                        })
 
             if len(items) >= 10:
                 break
 
-        # если сайт ничего не дал
+        # 🔥 если iparts не дал данные
         if not items:
-            return [
-                {"name": f"{q} (пример)", "price": "100"},
-                {"name": f"{q} (пример 2)", "price": "200"}
-            ]
+            items = [{
+                "name": f"{q} (не удалось получить с iparts)",
+                "price": "—"
+            }]
+
+        # сохраняем в кеш
+        CACHE[q] = items
 
         return items
 
     except Exception as e:
         logger.exception(e)
-        return [
-            {"name": f"{q} (ошибка поиска)", "price": "—"}
-        ]
+
+        return [{
+            "name": f"{q} (ошибка загрузки)",
+            "price": "—"
+        }]
 
 # ---------- RUN ----------
 if __name__ == "__main__":
