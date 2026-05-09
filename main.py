@@ -1,30 +1,30 @@
 import asyncio
 import logging
 import os
+import hashlib
 from contextlib import asynccontextmanager
 from datetime import datetime
-from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from passlib.context import CryptContext
 
 from bot import run_bot
 
-# ---------- IPARTS ----------
+# --- IPARTS ---
 import requests
 from bs4 import BeautifulSoup
 
+# --- PLAYWRIGHT OPTIONAL ---
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except:
+    PLAYWRIGHT_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO)
-
 logger = logging.getLogger("main")
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto"
-)
 
 # ---------- BOT ----------
 async def safe_bot():
@@ -35,37 +35,22 @@ async def safe_bot():
 
 # ---------- STORAGE ----------
 USERS = {}
-SESSIONS = {}
 REPORTS = []
 CACHE = {}
 
 # ---------- MODELS ----------
-class RegisterIn(BaseModel):
-    username: str
-    password: str
-
-
-class LoginIn(BaseModel):
-    username: str
-    password: str
-
-
 class ReportIn(BaseModel):
-    telegram_id: str = "web"
+    telegram_id: str
     type: str
     model: str
     purchase_price: float = 0
     repair_cost: float = 0
     sell_price: float = 0
 
-
-# ---------- PASSWORD ----------
-def hash_password(password: str):
-    return pwd_context.hash(password)
-
-
-def verify_password(password: str, hashed: str):
-    return pwd_context.verify(password, hashed)
+class AuthIn(BaseModel):
+    telegram_id: str
+    username: str
+    password: str
 
 # ---------- APP ----------
 @asynccontextmanager
@@ -79,43 +64,30 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
-app.mount(
-    "/static",
-    StaticFiles(directory="static"),
-    name="static"
-)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def index():
     return FileResponse("static/index.html")
 
+# ---------- PASSWORD HASH ----------
+def hash_password(password: str):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 # ---------- REGISTER ----------
 @app.post("/register")
-async def register(data: RegisterIn):
+async def register(data: AuthIn):
 
-    username = data.username.strip().lower()
+    tg_id = str(data.telegram_id)
 
-    if len(username) < 3:
-        raise HTTPException(
-            400,
-            "Слишком короткий логин"
-        )
+    if tg_id in USERS:
+        return {
+            "ok": False,
+            "message": "Пользователь уже существует"
+        }
 
-    if len(data.password) < 5:
-        raise HTTPException(
-            400,
-            "Слишком короткий пароль"
-        )
-
-    if username in USERS:
-        raise HTTPException(
-            400,
-            "Пользователь уже существует"
-        )
-
-    USERS[username] = {
-        "id": str(uuid4()),
-        "username": username,
+    USERS[tg_id] = {
+        "username": data.username,
         "password": hash_password(data.password),
         "role": "admin" if len(USERS) == 0 else "user",
         "created_at": datetime.utcnow().isoformat()
@@ -123,41 +95,32 @@ async def register(data: RegisterIn):
 
     return {
         "ok": True,
-        "username": username
+        "user": USERS[tg_id]
     }
 
 # ---------- LOGIN ----------
 @app.post("/login")
-async def login(data: LoginIn):
+async def login(data: AuthIn):
 
-    username = data.username.strip().lower()
+    tg_id = str(data.telegram_id)
 
-    user = USERS.get(username)
+    user = USERS.get(tg_id)
 
     if not user:
-        raise HTTPException(
-            401,
-            "Пользователь не найден"
-        )
+        return {
+            "ok": False,
+            "message": "Пользователь не найден"
+        }
 
-    if not verify_password(
-        data.password,
-        user["password"]
-    ):
-        raise HTTPException(
-            401,
-            "Неверный пароль"
-        )
-
-    token = str(uuid4())
-
-    SESSIONS[token] = username
+    if user["password"] != hash_password(data.password):
+        return {
+            "ok": False,
+            "message": "Неверный пароль"
+        }
 
     return {
         "ok": True,
-        "token": token,
-        "username": username,
-        "role": user["role"]
+        "user": user
     }
 
 # ---------- REPORT ----------
@@ -165,17 +128,10 @@ async def login(data: LoginIn):
 async def create_report(data: ReportIn):
 
     if data.type == "sale":
-
-        profit = (
-            data.sell_price
-            - data.purchase_price
-            - data.repair_cost
-        )
+        profit = data.sell_price - data.purchase_price - data.repair_cost
 
     elif data.type == "repair":
-
-        # ремонт = расход
-        profit = -abs(data.purchase_price)
+        profit = data.repair_cost - data.purchase_price
 
     else:
         profit = 0
@@ -194,80 +150,35 @@ async def create_report(data: ReportIn):
 
     REPORTS.append(report)
 
-    return {
-        "ok": True,
-        "profit": profit
-    }
+    return {"ok": True, "profit": profit}
 
 # ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
-    sales = [
-        r for r in REPORTS
-        if r["type"] == "sale"
-    ]
-
-    repairs = [
-        r for r in REPORTS
-        if r["type"] == "repair"
-    ]
+    sales = [r for r in REPORTS if r["type"] == "sale"]
+    repairs = [r for r in REPORTS if r["type"] == "repair"]
 
     return {
-        "sales_count": len(sales),
-        "repairs_count": len(repairs),
-
-        "sales_profit":
-            sum(r["profit"] for r in sales),
-
-        "repairs_profit":
-            sum(r["profit"] for r in repairs),
-
-        "total_profit":
-            sum(r["profit"] for r in REPORTS)
-    }
-
-# ---------- CLEAR ANALYTICS ----------
-@app.delete("/analytics/clear")
-async def clear_analytics():
-
-    REPORTS.clear()
-
-    return {
-        "ok": True
-    }
-
-# ---------- HISTORY ----------
-@app.get("/analytics/history")
-async def history():
-
-    repairs = []
-    sales = []
-
-    for r in REPORTS:
-
-        item = {
-            "id": r["id"],
-            "model": r["model"],
-            "profit": r["profit"],
-            "created_at": r["created_at"]
-        }
-
-        if r["type"] == "repair":
-            repairs.append(item)
-
-        elif r["type"] == "sale":
-            sales.append(item)
-
-    return {
-        "repairs": repairs,
-        "sales": sales
+        "sales_profit": sum(r["profit"] for r in sales),
+        "repairs_profit": sum(r["profit"] for r in repairs),
+        "total_profit": sum(r["profit"] for r in REPORTS)
     }
 
 # ---------- REPORTS ----------
 @app.get("/reports")
 async def get_reports():
     return REPORTS
+
+# ---------- CLEAR REPORTS ----------
+@app.delete("/reports/clear")
+async def clear_reports():
+
+    REPORTS.clear()
+
+    return {
+        "ok": True
+    }
 
 # ---------- ADMIN ----------
 @app.get("/admin")
@@ -280,11 +191,9 @@ async def admin():
 # ---------- HEALTH ----------
 @app.get("/health")
 async def health():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
 
-# ---------- IPARTS ----------
+# ---------- IPARTS SEARCH ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -293,41 +202,29 @@ async def search_parts(q: str):
     if q in CACHE:
         return CACHE[q]
 
+    # ---------- REQUESTS ----------
     try:
 
-        url = f"https://iparts.by/search?q={q}"
+        url = f"https://iparts.by/search/?q={q}"
 
         headers = {
             "User-Agent": "Mozilla/5.0"
         }
 
-        r = requests.get(
-            url,
-            headers=headers,
-            timeout=10
-        )
+        r = requests.get(url, headers=headers, timeout=10)
 
-        soup = BeautifulSoup(
-            r.text,
-            "html.parser"
-        )
+        soup = BeautifulSoup(r.text, "html.parser")
 
         items = []
 
         for el in soup.find_all("div"):
 
-            text = el.get_text(
-                " ",
-                strip=True
-            )
+            text = el.get_text(" ", strip=True)
 
-            if (
-                "BYN" in text
-                and len(text) < 200
-            ):
+            if "BYN" in text and len(text) < 200:
 
                 items.append({
-                    "name": text[:120],
+                    "name": text[:100],
                     "price": text.split()[-1]
                 })
 
@@ -339,12 +236,68 @@ async def search_parts(q: str):
             return items
 
     except Exception as e:
-        logger.exception(e)
+        logger.warning(e)
 
+    # ---------- PLAYWRIGHT ----------
+    if PLAYWRIGHT_AVAILABLE:
+
+        try:
+
+            async with async_playwright() as p:
+
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage"
+                    ]
+                )
+
+                page = await browser.new_page()
+
+                await page.goto(
+                    f"https://iparts.by/search/?q={q}",
+                    timeout=60000
+                )
+
+                await page.wait_for_timeout(5000)
+
+                elements = await page.query_selector_all("div")
+
+                items = []
+
+                for el in elements:
+
+                    text = await el.inner_text()
+
+                    if "BYN" in text and len(text) < 200:
+
+                        lines = text.split("\n")
+
+                        if len(lines) >= 2:
+
+                            items.append({
+                                "name": lines[0],
+                                "price": lines[-1]
+                            })
+
+                    if len(items) >= 10:
+                        break
+
+                await browser.close()
+
+                if items:
+                    CACHE[q] = items
+                    return items
+
+        except Exception as e:
+            logger.exception(e)
+
+    # ---------- FALLBACK ----------
     return [
         {
-            "name": f"{q} не найден",
-            "price": "-"
+            "name": f"{q} (iparts не дал данные)",
+            "price": "—"
         }
     ]
 
@@ -353,9 +306,7 @@ if __name__ == "__main__":
 
     import uvicorn
 
-    port = int(
-        os.getenv("PORT", 8000)
-    )
+    port = int(os.getenv("PORT", 8000))
 
     uvicorn.run(
         "main:app",
