@@ -38,7 +38,7 @@ USERS = {}
 REPORTS = []
 CACHE = {}
 
-# ---------- MODELS ----------
+# ---------- MODEL ----------
 class ReportIn(BaseModel):
     telegram_id: str
     type: str
@@ -46,11 +46,6 @@ class ReportIn(BaseModel):
     purchase_price: float = 0
     repair_cost: float = 0
     sell_price: float = 0
-
-class AuthIn(BaseModel):
-    telegram_id: str
-    username: str
-    password: str
 
 # ---------- APP ----------
 @asynccontextmanager
@@ -70,58 +65,87 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def index():
     return FileResponse("static/index.html")
 
-# ---------- PASSWORD HASH ----------
+# ---------- PASSWORD ----------
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # ---------- REGISTER ----------
 @app.post("/register")
-async def register(data: AuthIn):
+async def register(data: dict):
 
-    tg_id = str(data.telegram_id)
+    tg_id = str(data.get("telegram_id"))
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return {"ok": False, "error": "Введите логин и пароль"}
 
     if tg_id in USERS:
-        return {
-            "ok": False,
-            "message": "Пользователь уже существует"
-        }
+        return {"ok": True, "user": USERS[tg_id]}
 
     USERS[tg_id] = {
-        "username": data.username,
-        "password": hash_password(data.password),
+        "telegram_id": tg_id,
+        "username": username,
+        "password": hash_password(password),
         "role": "admin" if len(USERS) == 0 else "user",
         "created_at": datetime.utcnow().isoformat()
     }
 
     return {
         "ok": True,
-        "user": USERS[tg_id]
+        "user": {
+            "username": username,
+            "role": USERS[tg_id]["role"]
+        }
     }
 
 # ---------- LOGIN ----------
 @app.post("/login")
-async def login(data: AuthIn):
+async def login(data: dict):
 
-    tg_id = str(data.telegram_id)
+    tg_id = str(data.get("telegram_id"))
+    username = data.get("username")
+    password = hash_password(data.get("password"))
 
     user = USERS.get(tg_id)
 
     if not user:
-        return {
-            "ok": False,
-            "message": "Пользователь не найден"
-        }
+        return {"ok": False, "error": "Аккаунт не найден"}
 
-    if user["password"] != hash_password(data.password):
-        return {
-            "ok": False,
-            "message": "Неверный пароль"
-        }
+    if user["username"] != username:
+        return {"ok": False, "error": "Неверный логин"}
+
+    if user["password"] != password:
+        return {"ok": False, "error": "Неверный пароль"}
 
     return {
         "ok": True,
-        "user": user
+        "user": {
+            "username": user["username"],
+            "role": user["role"]
+        }
     }
+
+# ---------- USER ----------
+@app.get("/user/{tg_id}")
+async def get_user(tg_id: str):
+
+    user = USERS.get(tg_id)
+
+    if not user:
+        return {"exists": False}
+
+    return {
+        "exists": True,
+        "username": user["username"],
+        "role": user["role"]
+    }
+
+# ---------- CLEAR ----------
+@app.delete("/reports/clear")
+async def clear_reports():
+    REPORTS.clear()
+    return {"ok": True}
 
 # ---------- REPORT ----------
 @app.post("/report")
@@ -170,16 +194,6 @@ async def analytics():
 async def get_reports():
     return REPORTS
 
-# ---------- CLEAR REPORTS ----------
-@app.delete("/reports/clear")
-async def clear_reports():
-
-    REPORTS.clear()
-
-    return {
-        "ok": True
-    }
-
 # ---------- ADMIN ----------
 @app.get("/admin")
 async def admin():
@@ -202,9 +216,7 @@ async def search_parts(q: str):
     if q in CACHE:
         return CACHE[q]
 
-    # ---------- REQUESTS ----------
     try:
-
         url = f"https://iparts.by/search/?q={q}"
 
         headers = {
@@ -218,11 +230,9 @@ async def search_parts(q: str):
         items = []
 
         for el in soup.find_all("div"):
-
             text = el.get_text(" ", strip=True)
 
             if "BYN" in text and len(text) < 200:
-
                 items.append({
                     "name": text[:100],
                     "price": text.split()[-1]
@@ -236,13 +246,10 @@ async def search_parts(q: str):
             return items
 
     except Exception as e:
-        logger.warning(e)
+        logger.exception(e)
 
-    # ---------- PLAYWRIGHT ----------
     if PLAYWRIGHT_AVAILABLE:
-
         try:
-
             async with async_playwright() as p:
 
                 browser = await p.chromium.launch(
@@ -274,12 +281,10 @@ async def search_parts(q: str):
 
                         lines = text.split("\n")
 
-                        if len(lines) >= 2:
-
-                            items.append({
-                                "name": lines[0],
-                                "price": lines[-1]
-                            })
+                        items.append({
+                            "name": lines[0],
+                            "price": lines[-1]
+                        })
 
                     if len(items) >= 10:
                         break
@@ -293,7 +298,6 @@ async def search_parts(q: str):
         except Exception as e:
             logger.exception(e)
 
-    # ---------- FALLBACK ----------
     return [
         {
             "name": f"{q} (iparts не дал данные)",

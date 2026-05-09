@@ -1,98 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
+
 <meta charset="UTF-8">
+
 <meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+content="width=device-width, initial-scale=1.0">
 
 <title>CRM</title>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
-body {
+
+body{
     margin:0;
-    font-family:Arial;
     background:#0b1220;
     color:white;
+    font-family:Arial;
 }
 
-/* TOP BAR */
-.tabbar {
+.tabbar{
     display:flex;
-    overflow-x:auto;
+    overflow:auto;
+    gap:10px;
     background:#111827;
     padding:10px;
-    gap:10px;
 }
 
-.tab {
-    padding:10px 14px;
+.tab{
     background:#1f2937;
+    padding:10px 14px;
     border-radius:10px;
     cursor:pointer;
     white-space:nowrap;
 }
 
-/* CONTAINER */
-.container {
+.container{
     padding:15px;
 }
 
-/* CARD */
-.card {
+.card{
     background:#111827;
     padding:15px;
     border-radius:14px;
     margin-bottom:15px;
 }
 
-/* INPUT */
-input, select {
+input,select{
     width:100%;
     padding:10px;
     margin-top:8px;
+    border:none;
     border-radius:8px;
-    border:none;
-    box-sizing:border-box;
 }
 
-/* BUTTON */
-button {
-    margin-top:10px;
-    padding:12px;
+button{
     width:100%;
-    border-radius:10px;
+    padding:12px;
+    margin-top:10px;
     border:none;
+    border-radius:10px;
     background:#22c55e;
-    font-weight:bold;
-    cursor:pointer;
     color:white;
+    font-weight:bold;
 }
 
-.del {
+.del{
     background:#ef4444;
 }
 
-/* LIST */
-li {
-    padding:10px;
-    background:#1f2937;
-    margin-top:6px;
-    border-radius:8px;
-    list-style:none;
-}
-
-.hidden {
+.hidden{
     display:none;
 }
 
-.search-card {
+.search-card{
     background:#1f2937;
     padding:10px;
-    margin-top:8px;
     border-radius:10px;
+    margin-top:10px;
 }
+
 </style>
 </head>
 
@@ -100,183 +88,103 @@ li {
 
 <div class="tabbar">
 
-    <div class="tab" onclick="showTab('sale')">
-        📊 Продажа
-    </div>
-
-    <div class="tab" onclick="showTab('repair')">
-        🛠 Ремонт
-    </div>
-
-    <div class="tab" onclick="showTab('parts')">
-        🔩 Запчасти
-    </div>
-
-    <div class="tab" onclick="loadAnalytics()">
-        📈 Аналитика
-    </div>
-
-    <div class="tab" onclick="showTab('profile')">
-        👤 Профиль
-    </div>
-
-    <div class="tab" onclick="loadAdmin()">
-        ⚙️ Админ
-    </div>
+<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+<div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
+<div class="tab" onclick="loadProfile()">👤 Профиль</div>
 
 </div>
 
 <div class="container">
 
-<!-- SALE -->
 <div id="sale" class="card">
 
-    <h3>Продажа</h3>
+<h3>Продажа</h3>
 
-    <input id="sale_model" placeholder="Модель">
+<input id="sale_model" placeholder="Модель">
+<input id="sale_purchase" placeholder="Цена покупки">
+<input id="sale_repair" placeholder="Цена ремонта">
+<input id="sale_sell" placeholder="Цена продажи">
 
-    <input id="sale_purchase" placeholder="Цена покупки">
+<button onclick="sendSale()">Сохранить</button>
 
-    <input id="sale_repair" placeholder="Цена ремонта">
-
-    <input id="sale_sell" placeholder="Цена продажи">
-
-    <button onclick="sendSale()">
-        Сохранить
-    </button>
-
-    <div id="sale_profit"></div>
+<div id="sale_profit"></div>
 
 </div>
 
-<!-- REPAIR -->
 <div id="repair" class="card hidden">
 
-    <h3>Ремонт</h3>
+<h3>Ремонт</h3>
 
-    <input id="repair_model" placeholder="Модель">
+<input id="repair_model" placeholder="Модель">
 
-    <select id="parts_select" multiple></select>
+<select id="parts_select" multiple></select>
 
-    <input id="repair_price" placeholder="Цена работы">
+<input id="repair_price" placeholder="Цена работы">
 
-    <button onclick="sendRepair()">
-        Сохранить
-    </button>
+<button onclick="sendRepair()">Сохранить</button>
 
 </div>
 
-<!-- PARTS -->
 <div id="parts" class="card hidden">
 
-    <h3>Запчасти</h3>
+<h3>Запчасти</h3>
 
-    <input id="part_name" placeholder="Название">
+<input id="part_name" placeholder="Название">
+<input id="part_price" placeholder="Цена">
 
-    <input id="part_price" placeholder="Цена">
+<button onclick="addPart()">Добавить</button>
 
-    <button onclick="addPart()">
-        Добавить
-    </button>
+<hr>
 
-    <hr>
+<input id="search_query" placeholder="Поиск iparts">
 
-    <input id="search_query" placeholder="Поиск iparts">
+<button onclick="searchParts()">Найти</button>
 
-    <button onclick="searchParts()">
-        Найти
-    </button>
+<div id="search_results"></div>
 
-    <div id="search_results"></div>
-
-    <ul id="parts_list"></ul>
+<ul id="parts_list"></ul>
 
 </div>
 
-<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
-<!-- PROFILE -->
-<div id="profile" class="card hidden">
-
-    <h3>Профиль</h3>
-
-    <input id="reg_username" placeholder="Логин">
-
-    <input
-        id="reg_password"
-        type="password"
-        placeholder="Пароль"
-    >
-
-    <button onclick="register()">
-        Регистрация
-    </button>
-
-    <button onclick="login()">
-        Войти
-    </button>
-
-    <div id="profile_info"></div>
-
-</div>
-
-<!-- ADMIN -->
-<div id="admin" class="card hidden"></div>
+<div id="profile" class="card hidden"></div>
 
 </div>
 
 <script>
 
-const tg = window.Telegram?.WebApp;
+const tg = window.Telegram.WebApp;
 
-if (tg) {
-    tg.ready();
-    tg.expand();
-}
+tg.ready();
+tg.expand();
 
-/* ---------- USER ---------- */
-
-function safeUserId() {
+function safeUserId(){
     return tg?.initDataUnsafe?.user?.id || "0";
 }
 
-function safeUsername() {
-    return tg?.initDataUnsafe?.user?.username || "no_username";
-}
+function showTab(tab){
 
-/* ---------- TABS ---------- */
+    ["sale","repair","parts","analytics","profile"]
+    .forEach(id=>{
 
-function showTab(tab) {
+        document
+        .getElementById(id)
+        .classList.add("hidden");
 
-    [
-        "sale",
-        "repair",
-        "parts",
-        "analytics",
-        "profile",
-        "admin"
-    ].forEach(id => {
-
-        const el = document.getElementById(id);
-
-        if (el)
-            el.classList.add("hidden");
     });
 
-    const active = document.getElementById(tab);
-
-    if (active)
-        active.classList.remove("hidden");
+    document
+    .getElementById(tab)
+    .classList.remove("hidden");
 }
 
-/* ---------- PARTS ---------- */
+let parts =
+JSON.parse(localStorage.getItem("parts") || "[]");
 
-let parts = JSON.parse(
-    localStorage.getItem("parts") || "[]"
-);
-
-function saveParts() {
+function saveParts(){
 
     localStorage.setItem(
         "parts",
@@ -284,41 +192,36 @@ function saveParts() {
     );
 }
 
-function renderParts() {
+function renderParts(){
 
     const list =
-        document.getElementById("parts_list");
+    document.getElementById("parts_list");
 
     const select =
-        document.getElementById("parts_select");
-
-    if (!list || !select)
-        return;
+    document.getElementById("parts_select");
 
     list.innerHTML = "";
     select.innerHTML = "";
 
-    parts.forEach((p, i) => {
+    parts.forEach((p,i)=>{
 
-        const li = document.createElement("li");
+        const li =
+        document.createElement("li");
 
-        li.innerHTML = `
-            <b>${p.name}</b><br>
-            ${p.price}
-        `;
+        li.innerHTML =
+        `${p.name} - ${p.price}`;
 
-        const del = document.createElement("button");
+        const del =
+        document.createElement("button");
 
         del.innerText = "Удалить";
-
         del.className = "del";
 
-        del.onclick = () => {
+        del.onclick = ()=>{
 
-            parts.splice(i, 1);
+            parts.splice(i,1);
 
             saveParts();
-
             renderParts();
         };
 
@@ -326,112 +229,89 @@ function renderParts() {
 
         list.appendChild(li);
 
-        const opt = document.createElement("option");
+        const opt =
+        document.createElement("option");
 
-        opt.value = JSON.stringify(p);
+        opt.value =
+        JSON.stringify(p);
 
-        opt.text = `${p.name} (${p.price})`;
+        opt.text =
+        p.name;
 
         select.appendChild(opt);
+
     });
 }
 
-function addPart() {
-
-    const name =
-        document.getElementById("part_name").value;
-
-    const price =
-        document.getElementById("part_price").value;
-
-    if (!name || !price)
-        return;
+function addPart(){
 
     parts.push({
-        name,
-        price
+
+        name:
+        document.getElementById("part_name").value,
+
+        price:
+        document.getElementById("part_price").value
     });
 
     saveParts();
 
     renderParts();
-
-    document.getElementById("part_name").value = "";
-    document.getElementById("part_price").value = "";
 }
 
-/* ---------- IPARTS ---------- */
-
-async function searchParts() {
+async function searchParts(){
 
     const q =
-        document.getElementById("search_query").value;
+    document.getElementById("search_query").value;
 
-    if (!q)
-        return;
+    const r =
+    await fetch("/parts/search?q=" + encodeURIComponent(q));
+
+    const data =
+    await r.json();
 
     const container =
-        document.getElementById("search_results");
+    document.getElementById("search_results");
 
-    container.innerHTML = "Поиск...";
+    container.innerHTML = "";
 
-    try {
+    data.forEach(p=>{
 
-        const r = await fetch(
-            "/parts/search?q=" +
-            encodeURIComponent(q)
-        );
+        const div =
+        document.createElement("div");
 
-        const data = await r.json();
+        div.className = "search-card";
 
-        container.innerHTML = "";
+        div.innerHTML =
+        `<b>${p.name}</b><br>${p.price}`;
 
-        data.forEach(p => {
+        const btn =
+        document.createElement("button");
 
-            const div =
-                document.createElement("div");
+        btn.innerText = "Добавить";
 
-            div.className = "search-card";
+        btn.onclick = ()=>{
 
-            div.innerHTML = `
-                <b>${p.name}</b><br>
-                <small>${p.price}</small>
-            `;
+            parts.push({
+                name:p.name,
+                price:p.price
+            });
 
-            const btn =
-                document.createElement("button");
+            saveParts();
+            renderParts();
+        };
 
-            btn.innerText = "Добавить";
+        div.appendChild(btn);
 
-            btn.onclick = () => {
+        container.appendChild(div);
 
-                parts.push({
-                    name: p.name,
-                    price: p.price
-                });
-
-                saveParts();
-
-                renderParts();
-            };
-
-            div.appendChild(btn);
-
-            container.appendChild(div);
-        });
-
-    } catch(e) {
-
-        container.innerHTML =
-            "Ошибка поиска";
-    }
+    });
 }
 
-/* ---------- SALE ---------- */
+async function sendSale(){
 
-async function sendSale() {
-
-    const res = await fetch("/report", {
+    const res =
+    await fetch("/report",{
 
         method:"POST",
 
@@ -439,62 +319,48 @@ async function sendSale() {
             "Content-Type":"application/json"
         },
 
-        body: JSON.stringify({
+        body:JSON.stringify({
 
-            telegram_id: safeUserId(),
+            telegram_id:safeUserId(),
 
             type:"sale",
 
             model:
-                document.getElementById(
-                    "sale_model"
-                ).value,
+            document.getElementById("sale_model").value,
 
-            purchase_price: Number(
-                document.getElementById(
-                    "sale_purchase"
-                ).value
+            purchase_price:Number(
+                document.getElementById("sale_purchase").value
             ),
 
-            repair_cost: Number(
-                document.getElementById(
-                    "sale_repair"
-                ).value
+            repair_cost:Number(
+                document.getElementById("sale_repair").value
             ),
 
-            sell_price: Number(
-                document.getElementById(
-                    "sale_sell"
-                ).value
+            sell_price:Number(
+                document.getElementById("sale_sell").value
             )
         })
     });
 
     const r = await res.json();
 
-    document.getElementById(
-        "sale_profit"
-    ).innerText =
-        "Profit: " + r.profit;
+    document.getElementById("sale_profit")
+    .innerText = "Profit: " + r.profit;
 }
 
-/* ---------- REPAIR ---------- */
-
-async function sendRepair() {
+async function sendRepair(){
 
     const selected =
-        [...document.getElementById(
-            "parts_select"
-        ).selectedOptions]
-        .map(o => JSON.parse(o.value));
+    [...document.getElementById("parts_select").selectedOptions]
+    .map(o=>JSON.parse(o.value));
 
     let partsSum = 0;
 
-    selected.forEach(p => {
+    selected.forEach(p=>{
         partsSum += Number(p.price);
     });
 
-    await fetch("/report", {
+    await fetch("/report",{
 
         method:"POST",
 
@@ -502,23 +368,19 @@ async function sendRepair() {
             "Content-Type":"application/json"
         },
 
-        body: JSON.stringify({
+        body:JSON.stringify({
 
-            telegram_id: safeUserId(),
+            telegram_id:safeUserId(),
 
             type:"repair",
 
             model:
-                document.getElementById(
-                    "repair_model"
-                ).value,
+            document.getElementById("repair_model").value,
 
-            purchase_price: partsSum,
+            purchase_price:partsSum,
 
-            repair_cost: Number(
-                document.getElementById(
-                    "repair_price"
-                ).value
+            repair_cost:Number(
+                document.getElementById("repair_price").value
             ),
 
             sell_price:0
@@ -528,221 +390,193 @@ async function sendRepair() {
     alert("Сохранено");
 }
 
-/* ---------- ANALYTICS ---------- */
-
-async function loadAnalytics() {
+async function loadAnalytics(){
 
     showTab("analytics");
 
-    const r = await fetch("/analytics");
+    const r =
+    await fetch("/analytics");
 
-    const d = await r.json();
+    const d =
+    await r.json();
 
-    document.getElementById(
-        "analytics"
-    ).innerHTML =
+    const rr =
+    await fetch("/reports");
 
-    `<h3>Аналитика</h3>
+    const reports =
+    await rr.json();
 
-    <p>Продажи: ${d.sales_profit || 0}</p>
+    let history = "";
 
-    <p>Ремонты: ${d.repairs_profit || 0}</p>
+    reports.forEach(rep=>{
 
-    <p><b>Итого: ${d.total_profit || 0}</b></p>
-
-    <button onclick="loadReports()">
-        Список ремонтов/продаж
-    </button>
-
-    <button
-        class="del"
-        onclick="clearReports()"
-    >
-        Очистить аналитику
-    </button>
-
-    <div id="reports_container"></div>`;
-}
-
-/* ---------- REPORTS ---------- */
-
-async function loadReports() {
-
-    const r = await fetch("/reports");
-
-    const data = await r.json();
-
-    let html = "";
-
-    data.reverse().forEach(rep => {
-
-        html += `
-
+        history += `
         <div class="search-card">
-
             <b>${rep.model}</b><br>
-
             Тип: ${rep.type}<br>
-
-            Profit: ${rep.profit}<br>
-
-            Дата: ${rep.created_at}
-
+            Profit: ${rep.profit}
         </div>
         `;
     });
 
-    document.getElementById(
-        "reports_container"
-    ).innerHTML = html;
+    document.getElementById("analytics").innerHTML = `
+    <h3>Аналитика</h3>
+
+    <p>Продажи: ${d.sales_profit}</p>
+    <p>Ремонты: ${d.repairs_profit}</p>
+    <p><b>Итого: ${d.total_profit}</b></p>
+
+    <button onclick="clearAnalytics()">
+        Очистить аналитику
+    </button>
+
+    <h3>История</h3>
+
+    ${history}
+    `;
 }
 
-/* ---------- CLEAR REPORTS ---------- */
+async function clearAnalytics(){
 
-async function clearReports() {
-
-    if (!confirm("Очистить аналитику?"))
-        return;
-
-    await fetch("/reports/clear", {
+    await fetch("/reports/clear",{
         method:"DELETE"
     });
-
-    alert("Очищено");
 
     loadAnalytics();
 }
 
-/* ---------- AUTH ---------- */
+async function loadProfile(){
 
-async function register() {
+    showTab("profile");
 
-    const username =
-        document.getElementById(
-            "reg_username"
-        ).value;
+    const tgId = safeUserId();
 
-    const password =
-        document.getElementById(
-            "reg_password"
-        ).value;
+    const r =
+    await fetch("/user/" + tgId);
 
-    const r = await fetch("/register", {
+    const data =
+    await r.json();
 
-        method:"POST",
+    if(data.exists){
 
-        headers:{
-            "Content-Type":"application/json"
-        },
+        document.getElementById("profile").innerHTML = `
+        <h3>Профиль</h3>
 
-        body: JSON.stringify({
+        <p>ID: ${tgId}</p>
 
-            telegram_id: safeUserId(),
+        <p>Логин: ${data.username}</p>
 
-            username,
-
-            password
-        })
-    });
-
-    const d = await r.json();
-
-    alert(d.message || "Регистрация успешна");
-}
-
-async function login() {
-
-    const username =
-        document.getElementById(
-            "reg_username"
-        ).value;
-
-    const password =
-        document.getElementById(
-            "reg_password"
-        ).value;
-
-    const r = await fetch("/login", {
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body: JSON.stringify({
-
-            telegram_id: safeUserId(),
-
-            username,
-
-            password
-        })
-    });
-
-    const d = await r.json();
-
-    if (d.ok) {
-
-        document.getElementById(
-            "profile_info"
-        ).innerHTML =
-
-        `
-        <p>ID: ${safeUserId()}</p>
-
-        <p>Username: ${d.user.username}</p>
-
-        <p>Role: ${d.user.role}</p>
+        <p>Роль: ${data.role}</p>
         `;
 
-        alert("Вход выполнен");
+        return;
+    }
+
+    document.getElementById("profile").innerHTML = `
+
+    <h3>Регистрация</h3>
+
+    <input id="reg_login" placeholder="Логин">
+
+    <input id="reg_password"
+    type="password"
+    placeholder="Пароль">
+
+    <button onclick="registerUser()">
+        Зарегистрироваться
+    </button>
+
+    <hr>
+
+    <h3>Вход</h3>
+
+    <input id="login_login" placeholder="Логин">
+
+    <input id="login_password"
+    type="password"
+    placeholder="Пароль">
+
+    <button onclick="loginUser()">
+        Войти
+    </button>
+    `;
+}
+
+async function registerUser(){
+
+    const res =
+    await fetch("/register",{
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+
+            telegram_id:safeUserId(),
+
+            username:
+            document.getElementById("reg_login").value,
+
+            password:
+            document.getElementById("reg_password").value
+        })
+    });
+
+    const data =
+    await res.json();
+
+    if(data.ok){
+
+        alert("Регистрация успешна");
+
+        loadProfile();
 
     } else {
 
-        alert(d.message);
+        alert(data.error);
     }
 }
 
-/* ---------- ADMIN ---------- */
+async function loginUser(){
 
-async function loadAdmin() {
+    const res =
+    await fetch("/login",{
 
-    showTab("admin");
+        method:"POST",
 
-    const r = await fetch("/admin");
+        headers:{
+            "Content-Type":"application/json"
+        },
 
-    const d = await r.json();
+        body:JSON.stringify({
 
-    let users = "";
+            telegram_id:safeUserId(),
 
-    for (let id in d.users) {
+            username:
+            document.getElementById("login_login").value,
 
-        const u = d.users[id];
+            password:
+            document.getElementById("login_password").value
+        })
+    });
 
-        users += `
-            <p>
-                ${u.username}
-                (${u.role})
-            </p>
-        `;
+    const data =
+    await res.json();
+
+    if(data.ok){
+
+        alert("Вход выполнен");
+
+        loadProfile();
+
+    } else {
+
+        alert(data.error);
     }
-
-    document.getElementById(
-        "admin"
-    ).innerHTML =
-
-    `<h3>Админ</h3>
-
-    ${users}
-
-    <p>
-        Отчетов:
-        ${d.reports.length}
-    </p>`;
 }
-
-/* ---------- INIT ---------- */
 
 renderParts();
 
