@@ -9,3 +9,5 @@ requests
 beautifulsoup4
 lxml
 playwright
+passlib[bcrypt]
+bcrypt
