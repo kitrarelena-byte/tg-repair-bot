@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import hashlib
 
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -8,39 +9,74 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-
 from pydantic import BaseModel
-
-from werkzeug.security import (
-    generate_password_hash,
-    check_password_hash
-)
 
 from bot import run_bot
 
-# ---------- IPARTS ----------
-import requests
-from bs4 import BeautifulSoup
-
-# ---------- PLAYWRIGHT ----------
+# ---------- OPTIONAL PLAYWRIGHT ----------
 try:
     from playwright.async_api import async_playwright
     PLAYWRIGHT_AVAILABLE = True
 except:
     PLAYWRIGHT_AVAILABLE = False
 
-logging.basicConfig(level=logging.INFO)
+# ---------- OPTIONAL REQUESTS ----------
+import requests
+from bs4 import BeautifulSoup
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 # =========================
-ADMIN
+# ADMIN
 # =========================
 
 ADMIN_USERNAME = "appletech752"
 
 # =========================
-BOT
+# APP
+# =========================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(safe_bot())
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+# =========================
+# STATIC
+# =========================
+
+if not os.path.exists("static"):
+    os.makedirs("static")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+async def index():
+    return FileResponse("static/index.html")
+
+# =========================
+# STORAGE
+# =========================
+
+USERS = {}
+REPORTS = []
+CACHE = {}
+
+# =========================
+# PASSWORDS
+# =========================
+
+def hash_password(password: str):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, hashed: str):
+    return hash_password(password) == hashed
+
+# =========================
+# BOT
 # =========================
 
 async def safe_bot():
@@ -50,20 +86,7 @@ async def safe_bot():
         logger.exception(e)
 
 # =========================
-STORAGE
-# =========================
-
-USERS = {}
-
-# username -> user
-USERNAMES = {}
-
-REPORTS = []
-
-CACHE = {}
-
-# =========================
-MODELS
+# MODELS
 # =========================
 
 class ReportIn(BaseModel):
@@ -75,160 +98,74 @@ class ReportIn(BaseModel):
     sell_price: float = 0
 
 # =========================
-APP
-# =========================
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-
-    asyncio.create_task(safe_bot())
-
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-# =========================
-STATIC
-# =========================
-
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount(
-    "/static",
-    StaticFiles(directory="static"),
-    name="static"
-)
-
-@app.get("/")
-async def index():
-    return FileResponse("static/index.html")
-
-# =========================
-REGISTER
+# AUTH
 # =========================
 
 @app.post("/register")
 async def register(data: dict):
 
     telegram_id = str(data.get("telegram_id"))
-
     username = data.get("username", "").strip()
-
     password = data.get("password", "").strip()
 
     if not username or not password:
-        raise HTTPException(
-            400,
-            "Заполни логин и пароль"
-        )
+        raise HTTPException(400, "Введите логин и пароль")
 
-    if username in USERNAMES:
-        raise HTTPException(
-            400,
-            "Аккаунт уже существует"
-        )
+    if username in USERS:
+        raise HTTPException(400, "Аккаунт уже существует")
 
-    if telegram_id in USERS:
-        raise HTTPException(
-            400,
-            "На этом Telegram уже есть аккаунт"
-        )
-
-    role = (
-        "admin"
-        if username == ADMIN_USERNAME
-        else "user"
-    )
-
-    user = {
+    USERS[username] = {
         "telegram_id": telegram_id,
         "username": username,
-        "password": generate_password_hash(password),
-        "role": role,
+        "password": hash_password(password),
+        "role": "admin" if username == ADMIN_USERNAME else "user",
         "blocked": False,
         "created_at": datetime.utcnow().isoformat()
     }
 
-    USERS[telegram_id] = user
-
-    USERNAMES[username] = user
-
     return {
         "ok": True,
-        "user": {
-            "telegram_id": telegram_id,
-            "username": username,
-            "role": role
-        }
+        "role": USERS[username]["role"]
     }
-
-# =========================
-LOGIN
-# =========================
 
 @app.post("/login")
 async def login(data: dict):
 
+    telegram_id = str(data.get("telegram_id"))
     username = data.get("username", "").strip()
-
     password = data.get("password", "").strip()
 
-    user = USERNAMES.get(username)
+    if username not in USERS:
+        raise HTTPException(404, "Аккаунт не найден")
 
-    if not user:
-        raise HTTPException(
-            404,
-            "Аккаунт не найден"
-        )
+    user = USERS[username]
 
-    if user.get("blocked"):
+    if user["blocked"]:
+        raise HTTPException(403, "Аккаунт заблокирован")
+
+    if not verify_password(password, user["password"]):
+        raise HTTPException(401, "Неверный пароль")
+
+    if user["telegram_id"] != telegram_id:
         raise HTTPException(
             403,
-            "Аккаунт заблокирован"
-        )
-
-    if not check_password_hash(
-        user["password"],
-        password
-    ):
-        raise HTTPException(
-            401,
-            "Неверный пароль"
+            "Этот аккаунт привязан к другому Telegram аккаунту"
         )
 
     return {
         "ok": True,
-        "user": {
-            "telegram_id": user["telegram_id"],
-            "username": user["username"],
-            "role": user["role"]
-        }
+        "username": user["username"],
+        "role": user["role"]
     }
 
 # =========================
-REPORT
+# REPORT
 # =========================
 
 @app.post("/report")
 async def create_report(data: ReportIn):
 
-    user = USERS.get(str(data.telegram_id))
-
-    if not user:
-        raise HTTPException(
-            401,
-            "Пользователь не найден"
-        )
-
-    if user.get("blocked"):
-        raise HTTPException(
-            403,
-            "Аккаунт заблокирован"
-        )
-
     if data.type == "sale":
-
         profit = (
             data.sell_price
             - data.purchase_price
@@ -236,11 +173,7 @@ async def create_report(data: ReportIn):
         )
 
     elif data.type == "repair":
-
-        profit = (
-            data.repair_cost
-            - data.purchase_price
-        )
+        profit = data.repair_cost - data.purchase_price
 
     else:
         profit = 0
@@ -248,7 +181,6 @@ async def create_report(data: ReportIn):
     report = {
         "id": len(REPORTS) + 1,
         "telegram_id": data.telegram_id,
-        "username": user["username"],
         "type": data.type,
         "model": data.model,
         "purchase_price": data.purchase_price,
@@ -266,42 +198,84 @@ async def create_report(data: ReportIn):
     }
 
 # =========================
-ANALYTICS
+# ANALYTICS
 # =========================
 
 @app.get("/analytics")
 async def analytics():
 
-    sales = [
-        r for r in REPORTS
-        if r["type"] == "sale"
-    ]
-
-    repairs = [
-        r for r in REPORTS
-        if r["type"] == "repair"
-    ]
+    sales = [r for r in REPORTS if r["type"] == "sale"]
+    repairs = [r for r in REPORTS if r["type"] == "repair"]
 
     return {
-        "sales_profit":
-            sum(r["profit"] for r in sales),
-
-        "repairs_profit":
-            sum(r["profit"] for r in repairs),
-
-        "total_profit":
-            sum(r["profit"] for r in REPORTS)
+        "sales_profit": sum(r["profit"] for r in sales),
+        "repairs_profit": sum(r["profit"] for r in repairs),
+        "total_profit": sum(r["profit"] for r in REPORTS),
+        "reports": REPORTS
     }
 
-@app.post("/analytics/clear")
+@app.delete("/analytics/clear")
 async def clear_analytics():
-
     REPORTS.clear()
+    return {"ok": True}
+
+# =========================
+# USERS ADMIN
+# =========================
+
+@app.get("/users")
+async def get_users():
+
+    result = []
+
+    for username, user in USERS.items():
+        result.append({
+            "username": username,
+            "role": user["role"],
+            "blocked": user["blocked"],
+            "created_at": user["created_at"]
+        })
+
+    return result
+
+@app.post("/users/block")
+async def block_user(data: dict):
+
+    username = data.get("username")
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    USERS[username]["blocked"] = True
+
+    return {"ok": True}
+
+@app.post("/users/unblock")
+async def unblock_user(data: dict):
+
+    username = data.get("username")
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    USERS[username]["blocked"] = False
+
+    return {"ok": True}
+
+@app.delete("/users/delete")
+async def delete_user(data: dict):
+
+    username = data.get("username")
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    del USERS[username]
 
     return {"ok": True}
 
 # =========================
-REPORTS
+# REPORTS
 # =========================
 
 @app.get("/reports")
@@ -309,95 +283,28 @@ async def get_reports():
     return REPORTS
 
 # =========================
-ADMIN
+# ADMIN
 # =========================
 
 @app.get("/admin")
 async def admin():
 
+    users = []
+
+    for username, user in USERS.items():
+        users.append({
+            "username": username,
+            "role": user["role"],
+            "blocked": user["blocked"]
+        })
+
     return {
-        "users": USERS,
+        "users": users,
         "reports": REPORTS
     }
 
-@app.post("/admin/block")
-async def block_user(data: dict):
-
-    admin_username = data.get("admin_username")
-
-    target = data.get("target")
-
-    admin_user = USERNAMES.get(admin_username)
-
-    if not admin_user:
-        raise HTTPException(403, "Нет доступа")
-
-    if admin_user["role"] != "admin":
-        raise HTTPException(403, "Нет доступа")
-
-    user = USERNAMES.get(target)
-
-    if not user:
-        raise HTTPException(404, "Не найден")
-
-    user["blocked"] = True
-
-    return {"ok": True}
-
-@app.post("/admin/unblock")
-async def unblock_user(data: dict):
-
-    admin_username = data.get("admin_username")
-
-    target = data.get("target")
-
-    admin_user = USERNAMES.get(admin_username)
-
-    if not admin_user:
-        raise HTTPException(403, "Нет доступа")
-
-    if admin_user["role"] != "admin":
-        raise HTTPException(403, "Нет доступа")
-
-    user = USERNAMES.get(target)
-
-    if not user:
-        raise HTTPException(404, "Не найден")
-
-    user["blocked"] = False
-
-    return {"ok": True}
-
-@app.post("/admin/delete")
-async def delete_user(data: dict):
-
-    admin_username = data.get("admin_username")
-
-    target = data.get("target")
-
-    admin_user = USERNAMES.get(admin_username)
-
-    if not admin_user:
-        raise HTTPException(403, "Нет доступа")
-
-    if admin_user["role"] != "admin":
-        raise HTTPException(403, "Нет доступа")
-
-    user = USERNAMES.get(target)
-
-    if not user:
-        raise HTTPException(404, "Не найден")
-
-    telegram_id = user["telegram_id"]
-
-    USERNAMES.pop(target, None)
-
-    USERS.pop(telegram_id, None)
-
-    return {"ok": True}
-
 # =========================
-HEALTH
+# HEALTH
 # =========================
 
 @app.get("/health")
@@ -405,7 +312,7 @@ async def health():
     return {"status": "ok"}
 
 # =========================
-IPARTS SEARCH
+# IPARTS SEARCH
 # =========================
 
 @app.get("/parts/search")
@@ -416,6 +323,7 @@ async def search_parts(q: str):
     if q in CACHE:
         return CACHE[q]
 
+    # ---------- REQUESTS ----------
     try:
 
         url = f"https://iparts.by/search/?q={q}"
@@ -430,24 +338,18 @@ async def search_parts(q: str):
             timeout=10
         )
 
-        soup = BeautifulSoup(
-            r.text,
-            "html.parser"
-        )
+        soup = BeautifulSoup(r.text, "html.parser")
 
         items = []
 
         for el in soup.find_all("div"):
 
-            text = el.get_text(
-                " ",
-                strip=True
-            )
+            text = el.get_text(" ", strip=True)
 
             if "BYN" in text and len(text) < 200:
 
                 items.append({
-                    "name": text[:80],
+                    "name": text[:100],
                     "price": text.split()[-1]
                 })
 
@@ -455,17 +357,13 @@ async def search_parts(q: str):
                 break
 
         if items:
-
             CACHE[q] = items
-
             return items
 
     except Exception as e:
-
         logger.warning(e)
 
     # ---------- PLAYWRIGHT ----------
-
     if PLAYWRIGHT_AVAILABLE:
 
         try:
@@ -487,44 +385,35 @@ async def search_parts(q: str):
                     timeout=60000
                 )
 
-                await page.wait_for_timeout(5000)
+                await page.wait_for_timeout(4000)
 
-                html = await page.content()
-
-                await browser.close()
-
-                soup = BeautifulSoup(
-                    html,
-                    "html.parser"
-                )
+                elements = await page.query_selector_all("div")
 
                 items = []
 
-                for el in soup.find_all("div"):
+                for el in elements:
 
-                    text = el.get_text(
-                        " ",
-                        strip=True
-                    )
+                    text = await el.inner_text()
 
                     if "BYN" in text and len(text) < 200:
 
+                        lines = text.split("\n")
+
                         items.append({
-                            "name": text[:80],
-                            "price": text.split()[-1]
+                            "name": lines[0][:100],
+                            "price": lines[-1]
                         })
 
                     if len(items) >= 10:
                         break
 
+                await browser.close()
+
                 if items:
-
                     CACHE[q] = items
-
                     return items
 
         except Exception as e:
-
             logger.exception(e)
 
     return [
@@ -535,16 +424,14 @@ async def search_parts(q: str):
     ]
 
 # =========================
-RUN
+# RUN
 # =========================
 
 if __name__ == "__main__":
 
     import uvicorn
 
-    port = int(
-        os.getenv("PORT", 8000)
-    )
+    port = int(os.getenv("PORT", 8000))
 
     uvicorn.run(
         "main:app",
