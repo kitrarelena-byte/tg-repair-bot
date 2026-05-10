@@ -1,9 +1,7 @@
 import asyncio
 import logging
 import os
-import sqlite3
 import hashlib
-
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -14,70 +12,33 @@ from pydantic import BaseModel
 
 from bot import run_bot
 
+# --- IPARTS ---
 import requests
 from bs4 import BeautifulSoup
 
+# --- PLAYWRIGHT OPTIONAL ---
 try:
     from playwright.async_api import async_playwright
     PLAYWRIGHT_AVAILABLE = True
 except:
     PLAYWRIGHT_AVAILABLE = False
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
-DB = "crm.db"
-
-# =========================
-# DATABASE
-# =========================
-
-conn = sqlite3.connect(DB, check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id TEXT UNIQUE,
-    username TEXT,
-    password TEXT,
-    created_at TEXT
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id TEXT,
-    type TEXT,
-    model TEXT,
-    purchase_price REAL,
-    repair_cost REAL,
-    sell_price REAL,
-    profit REAL,
-    created_at TEXT
-)
-""")
-
-conn.commit()
-
-CACHE = {}
-
-# =========================
-# BOT
-# =========================
-
+# ---------- BOT ----------
 async def safe_bot():
     try:
         await run_bot()
     except Exception as e:
         logger.exception(e)
 
-# =========================
-# MODELS
-# =========================
+# ---------- STORAGE ----------
+USERS = {}
+REPORTS = []
+CACHE = {}
 
+# ---------- MODELS ----------
 class ReportIn(BaseModel):
     telegram_id: str
     type: str
@@ -86,10 +47,12 @@ class ReportIn(BaseModel):
     repair_cost: float = 0
     sell_price: float = 0
 
-# =========================
-# APP
-# =========================
+class AuthIn(BaseModel):
+    telegram_id: str
+    username: str
+    password: str
 
+# ---------- APP ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
@@ -97,10 +60,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# =========================
-# STATIC
-# =========================
-
+# ---------- STATIC ----------
 if not os.path.exists("static"):
     os.makedirs("static")
 
@@ -110,245 +70,145 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def index():
     return FileResponse("static/index.html")
 
-# =========================
-# HASH
-# =========================
-
+# ---------- HASH ----------
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# =========================
-# REGISTER
-# =========================
-
+# ---------- REGISTER ----------
 @app.post("/register")
-async def register(data: dict):
+async def register(data: AuthIn):
 
-    telegram_id = str(data.get("telegram_id"))
-    username = data.get("username")
-    password = data.get("password")
+    username = data.username.strip().lower()
+    tg_id = str(data.telegram_id)
 
-    if not username or not password:
-        return {"ok": False, "error": "missing fields"}
-
-    existing = cursor.execute(
-        "SELECT * FROM users WHERE telegram_id=?",
-        (telegram_id,)
-    ).fetchone()
-
-    if existing:
-        return {"ok": False, "error": "already exists"}
-
-    cursor.execute("""
-    INSERT INTO users (
-        telegram_id,
-        username,
-        password,
-        created_at
-    )
-    VALUES (?, ?, ?, ?)
-    """, (
-        telegram_id,
-        username,
-        hash_password(password),
-        datetime.utcnow().isoformat()
-    ))
-
-    conn.commit()
-
-    return {"ok": True}
-
-# =========================
-# LOGIN
-# =========================
-
-@app.post("/login")
-async def login(data: dict):
-
-    telegram_id = str(data.get("telegram_id"))
-    username = data.get("username")
-    password = data.get("password")
-
-    user = cursor.execute("""
-    SELECT * FROM users
-    WHERE telegram_id=? AND username=? AND password=?
-    """, (
-        telegram_id,
-        username,
-        hash_password(password)
-    )).fetchone()
-
-    if not user:
+    if username in USERS:
         return {
             "ok": False,
-            "error": "invalid login"
+            "message": "Логин уже занят"
         }
+
+    USERS[username] = {
+        "telegram_id": tg_id,
+        "username": username,
+        "password": hash_password(data.password),
+        "role": "admin" if len(USERS) == 0 else "user",
+        "created_at": datetime.utcnow().isoformat()
+    }
 
     return {
         "ok": True,
         "username": username
     }
 
-# =========================
-# REPORT
-# =========================
+# ---------- LOGIN ----------
+@app.post("/login")
+async def login(data: AuthIn):
 
+    username = data.username.strip().lower()
+
+    if username not in USERS:
+        return {
+            "ok": False,
+            "message": "Аккаунт не найден"
+        }
+
+    user = USERS[username]
+
+    # НЕВЕРНЫЙ ПАРОЛЬ
+    if user["password"] != hash_password(data.password):
+        return {
+            "ok": False,
+            "message": "Неверный пароль"
+        }
+
+    # ВХОД С ДРУГОГО TELEGRAM
+    if user["telegram_id"] != str(data.telegram_id):
+        return {
+            "ok": False,
+            "message": "Этот аккаунт привязан к другому Telegram аккаунту"
+        }
+
+    return {
+        "ok": True,
+        "username": username,
+        "role": user["role"]
+    }
+
+# ---------- REPORT ----------
 @app.post("/report")
 async def create_report(data: ReportIn):
 
     if data.type == "sale":
-        profit = (
-            data.sell_price
-            - data.purchase_price
-            - data.repair_cost
-        )
+        profit = data.sell_price - data.purchase_price - data.repair_cost
 
     elif data.type == "repair":
-        profit = (
-            data.repair_cost
-            - data.purchase_price
-        )
+        profit = data.repair_cost - data.purchase_price
 
     else:
         profit = 0
 
-    cursor.execute("""
-    INSERT INTO reports (
-        telegram_id,
-        type,
-        model,
-        purchase_price,
-        repair_cost,
-        sell_price,
-        profit,
-        created_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data.telegram_id,
-        data.type,
-        data.model,
-        data.purchase_price,
-        data.repair_cost,
-        data.sell_price,
-        profit,
-        datetime.utcnow().isoformat()
-    ))
+    report = {
+        "id": len(REPORTS) + 1,
+        "telegram_id": data.telegram_id,
+        "type": data.type,
+        "model": data.model,
+        "purchase_price": data.purchase_price,
+        "repair_cost": data.repair_cost,
+        "sell_price": data.sell_price,
+        "profit": profit,
+        "created_at": datetime.utcnow().isoformat()
+    }
 
-    conn.commit()
+    REPORTS.append(report)
 
     return {
         "ok": True,
         "profit": profit
     }
 
-# =========================
-# ANALYTICS
-# =========================
-
+# ---------- ANALYTICS ----------
 @app.get("/analytics")
 async def analytics():
 
-    rows = cursor.execute("""
-    SELECT type, profit FROM reports
-    """).fetchall()
-
-    sales_profit = 0
-    repairs_profit = 0
-
-    for r in rows:
-
-        if r[0] == "sale":
-            sales_profit += r[1]
-
-        if r[0] == "repair":
-            repairs_profit += r[1]
+    sales = [r for r in REPORTS if r["type"] == "sale"]
+    repairs = [r for r in REPORTS if r["type"] == "repair"]
 
     return {
-        "sales_profit": sales_profit,
-        "repairs_profit": repairs_profit,
-        "total_profit": sales_profit + repairs_profit
+        "sales_profit": sum(r["profit"] for r in sales),
+        "repairs_profit": sum(r["profit"] for r in repairs),
+        "total_profit": sum(r["profit"] for r in REPORTS),
+        "reports": REPORTS
     }
 
-# =========================
-# REPORTS
-# =========================
-
-@app.get("/reports")
-async def reports():
-
-    rows = cursor.execute("""
-    SELECT
-        id,
-        telegram_id,
-        type,
-        model,
-        profit,
-        created_at
-    FROM reports
-    ORDER BY id DESC
-    """).fetchall()
-
-    result = []
-
-    for r in rows:
-        result.append({
-            "id": r[0],
-            "telegram_id": r[1],
-            "type": r[2],
-            "model": r[3],
-            "profit": r[4],
-            "created_at": r[5]
-        })
-
-    return result
-
-# =========================
-# CLEAR ANALYTICS
-# =========================
-
+# ---------- CLEAR ANALYTICS ----------
 @app.post("/analytics/clear")
 async def clear_analytics():
 
-    cursor.execute("DELETE FROM reports")
-    conn.commit()
-
-    return {"ok": True}
-
-# =========================
-# ADMIN
-# =========================
-
-@app.get("/admin")
-async def admin():
-
-    users = cursor.execute("""
-    SELECT telegram_id, username
-    FROM users
-    """).fetchall()
-
-    reports = cursor.execute("""
-    SELECT COUNT(*)
-    FROM reports
-    """).fetchone()[0]
+    REPORTS.clear()
 
     return {
-        "users": users,
-        "reports": reports
+        "ok": True
     }
 
-# =========================
-# HEALTH
-# =========================
+# ---------- REPORTS ----------
+@app.get("/reports")
+async def get_reports():
+    return REPORTS
 
+# ---------- ADMIN ----------
+@app.get("/admin")
+async def admin():
+    return {
+        "users": USERS,
+        "reports": REPORTS
+    }
+
+# ---------- HEALTH ----------
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-# =========================
-# IPARTS SEARCH
-# =========================
-
+# ---------- IPARTS SEARCH ----------
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -365,11 +225,7 @@ async def search_parts(q: str):
             "User-Agent": "Mozilla/5.0"
         }
 
-        r = requests.get(
-            url,
-            headers=headers,
-            timeout=10
-        )
+        r = requests.get(url, headers=headers, timeout=10)
 
         soup = BeautifulSoup(r.text, "html.parser")
 
@@ -382,7 +238,7 @@ async def search_parts(q: str):
             if "BYN" in text and len(text) < 200:
 
                 items.append({
-                    "name": text[:100],
+                    "name": text[:120],
                     "price": text.split()[-1]
                 })
 
@@ -396,71 +252,14 @@ async def search_parts(q: str):
     except Exception as e:
         logger.exception(e)
 
-    if PLAYWRIGHT_AVAILABLE:
-
-        try:
-
-            async with async_playwright() as p:
-
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage"
-                    ]
-                )
-
-                page = await browser.new_page()
-
-                await page.goto(
-                    f"https://iparts.by/search/?q={q}",
-                    timeout=60000
-                )
-
-                await page.wait_for_timeout(5000)
-
-                elements = await page.query_selector_all("div")
-
-                items = []
-
-                for el in elements:
-
-                    text = await el.inner_text()
-
-                    if "BYN" in text and len(text) < 200:
-
-                        lines = text.split("\n")
-
-                        if len(lines) >= 2:
-
-                            items.append({
-                                "name": lines[0],
-                                "price": lines[-1]
-                            })
-
-                    if len(items) >= 10:
-                        break
-
-                await browser.close()
-
-                if items:
-                    CACHE[q] = items
-                    return items
-
-        except Exception as e:
-            logger.exception(e)
-
     return [
         {
-            "name": f"{q} (нет данных)",
+            "name": f"{q} (данные временно недоступны)",
             "price": "—"
         }
     ]
 
-# =========================
-# RUN
-# =========================
-
+# ---------- RUN ----------
 if __name__ == "__main__":
 
     import uvicorn

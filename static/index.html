@@ -33,6 +33,7 @@ body{
     padding:10px 14px;
     border-radius:10px;
     cursor:pointer;
+    white-space:nowrap;
 }
 
 .container{
@@ -52,6 +53,7 @@ input,select{
     padding:12px;
     border:none;
     border-radius:10px;
+    box-sizing:border-box;
 }
 
 button{
@@ -63,6 +65,7 @@ button{
     background:#22c55e;
     color:white;
     font-weight:bold;
+    cursor:pointer;
 }
 
 .del{
@@ -80,6 +83,20 @@ button{
     margin-top:10px;
 }
 
+.report-card{
+    background:#1f2937;
+    padding:10px;
+    border-radius:10px;
+    margin-top:10px;
+}
+
+hr{
+    border:none;
+    height:1px;
+    background:#374151;
+    margin:15px 0;
+}
+
 </style>
 
 </head>
@@ -88,77 +105,134 @@ button{
 
 <div class="tabbar">
 
-<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+    <div class="tab"
+    onclick="showTab('sale')">
+    📊 Продажа
+    </div>
 
-<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+    <div class="tab"
+    onclick="showTab('repair')">
+    🛠 Ремонт
+    </div>
 
-<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+    <div class="tab"
+    onclick="showTab('parts')">
+    🔩 Запчасти
+    </div>
 
-<div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
+    <div class="tab"
+    onclick="loadAnalytics()">
+    📈 Аналитика
+    </div>
 
-<div class="tab" onclick="loadProfile()">👤 Профиль</div>
+    <div class="tab"
+    onclick="loadProfile()">
+    👤 Профиль
+    </div>
 
 </div>
 
 <div class="container">
 
+<!-- SALE -->
+
 <div id="sale" class="card">
 
-<h3>Продажа</h3>
+    <h3>Продажа</h3>
 
-<input id="sale_model" placeholder="Модель">
+    <input
+    id="sale_model"
+    placeholder="Модель">
 
-<input id="sale_purchase" placeholder="Цена покупки">
+    <input
+    id="sale_purchase"
+    placeholder="Цена покупки">
 
-<input id="sale_repair" placeholder="Цена ремонта">
+    <input
+    id="sale_repair"
+    placeholder="Цена ремонта">
 
-<input id="sale_sell" placeholder="Цена продажи">
+    <input
+    id="sale_sell"
+    placeholder="Цена продажи">
 
-<button onclick="sendSale()">Сохранить</button>
+    <button onclick="sendSale()">
+        Сохранить
+    </button>
 
-<div id="sale_profit"></div>
-
-</div>
-
-<div id="repair" class="card hidden">
-
-<h3>Ремонт</h3>
-
-<input id="repair_model" placeholder="Модель">
-
-<select id="parts_select" multiple></select>
-
-<input id="repair_price" placeholder="Цена работы">
-
-<button onclick="sendRepair()">Сохранить</button>
+    <div id="sale_profit"></div>
 
 </div>
 
-<div id="parts" class="card hidden">
+<!-- REPAIR -->
 
-<h3>Запчасти</h3>
+<div id="repair"
+class="card hidden">
 
-<input id="part_name" placeholder="Название">
+    <h3>Ремонт</h3>
 
-<input id="part_price" placeholder="Цена">
+    <input
+    id="repair_model"
+    placeholder="Модель">
 
-<button onclick="addPart()">Добавить</button>
+    <select
+    id="parts_select"
+    multiple></select>
 
-<hr>
+    <input
+    id="repair_price"
+    placeholder="Цена работы">
 
-<input id="search_query" placeholder="Поиск iparts">
-
-<button onclick="searchParts()">Найти</button>
-
-<div id="search_results"></div>
-
-<ul id="parts_list"></ul>
+    <button onclick="sendRepair()">
+        Сохранить
+    </button>
 
 </div>
 
-<div id="analytics" class="card hidden"></div>
+<!-- PARTS -->
 
-<div id="profile" class="card hidden"></div>
+<div id="parts"
+class="card hidden">
+
+    <h3>Запчасти</h3>
+
+    <input
+    id="part_name"
+    placeholder="Название">
+
+    <input
+    id="part_price"
+    placeholder="Цена">
+
+    <button onclick="addPart()">
+        Добавить
+    </button>
+
+    <hr>
+
+    <input
+    id="search_query"
+    placeholder="Поиск iparts">
+
+    <button onclick="searchParts()">
+        Найти
+    </button>
+
+    <div id="search_results"></div>
+
+    <ul id="parts_list"></ul>
+
+</div>
+
+<!-- ANALYTICS -->
+
+<div id="analytics"
+class="card hidden"></div>
+
+<!-- PROFILE -->
+
+<div id="profile"
+class="card hidden"></div>
 
 </div>
 
@@ -171,22 +245,31 @@ if(tg){
     tg.expand();
 }
 
+/* =========================
+USER ID
+========================= */
+
 function safeUserId(){
 
-    const user = tg?.initDataUnsafe?.user;
+    const user =
+        tg?.initDataUnsafe?.user;
 
     if(user && user.id){
         return String(user.id);
     }
 
     let localId =
-    localStorage.getItem("local_user_id");
+        localStorage.getItem(
+            "local_user_id"
+        );
 
     if(!localId){
 
         localId =
-        "web_" +
-        Math.random().toString(36).slice(2);
+            "web_" +
+            Math.random()
+            .toString(36)
+            .slice(2);
 
         localStorage.setItem(
             "local_user_id",
@@ -196,6 +279,10 @@ function safeUserId(){
 
     return localId;
 }
+
+/* =========================
+TABS
+========================= */
 
 function showTab(tab){
 
@@ -218,12 +305,18 @@ function showTab(tab){
     .classList.remove("hidden");
 }
 
+/* =========================
+PARTS
+========================= */
+
 let parts =
 JSON.parse(
-    localStorage.getItem("parts") || "[]"
+    localStorage.getItem("parts")
+    || "[]"
 );
 
 function saveParts(){
+
     localStorage.setItem(
         "parts",
         JSON.stringify(parts)
@@ -233,10 +326,14 @@ function saveParts(){
 function renderParts(){
 
     const list =
-    document.getElementById("parts_list");
+        document.getElementById(
+            "parts_list"
+        );
 
     const select =
-    document.getElementById("parts_select");
+        document.getElementById(
+            "parts_select"
+        );
 
     list.innerHTML = "";
     select.innerHTML = "";
@@ -244,16 +341,19 @@ function renderParts(){
     parts.forEach((p,i)=>{
 
         const li =
-        document.createElement("li");
+            document.createElement("li");
 
         li.innerHTML =
-        `${p.name} - ${p.price}`;
+            `${p.name} - ${p.price}`;
 
         const del =
-        document.createElement("button");
+            document.createElement("button");
 
-        del.innerText = "Удалить";
-        del.className = "del";
+        del.innerText =
+            "Удалить";
+
+        del.className =
+            "del";
 
         del.onclick = ()=>{
 
@@ -269,12 +369,13 @@ function renderParts(){
         list.appendChild(li);
 
         const opt =
-        document.createElement("option");
+            document.createElement("option");
 
         opt.value =
-        JSON.stringify(p);
+            JSON.stringify(p);
 
-        opt.text = p.name;
+        opt.text =
+            p.name;
 
         select.appendChild(opt);
 
@@ -286,15 +387,14 @@ function addPart(){
     parts.push({
 
         name:
-        document.getElementById(
-            "part_name"
-        ).value,
+            document.getElementById(
+                "part_name"
+            ).value,
 
         price:
-        document.getElementById(
-            "part_price"
-        ).value
-
+            document.getElementById(
+                "part_price"
+            ).value
     });
 
     saveParts();
@@ -302,45 +402,51 @@ function addPart(){
     renderParts();
 }
 
+/* =========================
+IPARTS
+========================= */
+
 async function searchParts(){
 
     const q =
-    document.getElementById(
-        "search_query"
-    ).value;
+        document.getElementById(
+            "search_query"
+        ).value;
 
     const r =
-    await fetch(
-        "/parts/search?q=" +
-        encodeURIComponent(q)
-    );
+        await fetch(
+            "/parts/search?q=" +
+            encodeURIComponent(q)
+        );
 
     const data =
-    await r.json();
+        await r.json();
 
     const container =
-    document.getElementById(
-        "search_results"
-    );
+        document.getElementById(
+            "search_results"
+        );
 
     container.innerHTML = "";
 
     data.forEach(p=>{
 
         const div =
-        document.createElement("div");
+            document.createElement("div");
 
         div.className =
-        "search-card";
+            "search-card";
 
-        div.innerHTML =
-        `<b>${p.name}</b><br>
-        <small>${p.price}</small>`;
+        div.innerHTML = `
+            <b>${p.name}</b><br>
+            <small>${p.price}</small>
+        `;
 
         const btn =
-        document.createElement("button");
+            document.createElement("button");
 
-        btn.innerText = "Добавить";
+        btn.innerText =
+            "Добавить";
 
         btn.onclick = ()=>{
 
@@ -361,9 +467,14 @@ async function searchParts(){
     });
 }
 
+/* =========================
+SALE
+========================= */
+
 async function sendSale(){
 
-    const r = await fetch("/report",{
+    const r =
+    await fetch("/report",{
 
         method:"POST",
 
@@ -373,49 +484,63 @@ async function sendSale(){
 
         body:JSON.stringify({
 
-            telegram_id:safeUserId(),
+            telegram_id:
+                safeUserId(),
 
             type:"sale",
 
             model:
-            document.getElementById(
-                "sale_model"
-            ).value,
+                document
+                .getElementById(
+                    "sale_model"
+                ).value,
 
             purchase_price:Number(
-                document.getElementById(
+                document
+                .getElementById(
                     "sale_purchase"
                 ).value
             ),
 
             repair_cost:Number(
-                document.getElementById(
+                document
+                .getElementById(
                     "sale_repair"
                 ).value
             ),
 
             sell_price:Number(
-                document.getElementById(
+                document
+                .getElementById(
                     "sale_sell"
                 ).value
             )
         })
     });
 
-    const data = await r.json();
+    const data =
+        await r.json();
 
-    document.getElementById(
+    document
+    .getElementById(
         "sale_profit"
     ).innerText =
-    "Profit: " + data.profit;
+        "Profit: " +
+        data.profit;
 }
+
+/* =========================
+REPAIR
+========================= */
 
 async function sendRepair(){
 
     const selected =
-    [...document.getElementById(
-        "parts_select"
-    ).selectedOptions]
+    [...document
+        .getElementById(
+            "parts_select"
+        )
+        .selectedOptions]
     .map(o=>JSON.parse(o.value));
 
     let sum = 0;
@@ -434,19 +559,22 @@ async function sendRepair(){
 
         body:JSON.stringify({
 
-            telegram_id:safeUserId(),
+            telegram_id:
+                safeUserId(),
 
             type:"repair",
 
             model:
-            document.getElementById(
-                "repair_model"
-            ).value,
+                document
+                .getElementById(
+                    "repair_model"
+                ).value,
 
             purchase_price:sum,
 
             repair_cost:Number(
-                document.getElementById(
+                document
+                .getElementById(
                     "repair_price"
                 ).value
             ),
@@ -458,57 +586,73 @@ async function sendRepair(){
     alert("Сохранено");
 }
 
+/* =========================
+ANALYTICS
+========================= */
+
 async function loadAnalytics(){
 
     showTab("analytics");
 
     const r =
-    await fetch("/analytics");
+        await fetch("/analytics");
 
     const d =
-    await r.json();
-
-    const rr =
-    await fetch("/reports");
-
-    const reports =
-    await rr.json();
+        await r.json();
 
     let reportsHtml = "";
 
-    reports.forEach(r=>{
+    d.reports.forEach(r=>{
 
         reportsHtml += `
-        <div class="search-card">
+        <div class="report-card">
+
             <b>${r.type}</b><br>
+
             ${r.model}<br>
-            Profit: ${r.profit}
+
+            Profit:
+            ${r.profit}
+
         </div>
         `;
     });
 
-    document.getElementById(
+    document
+    .getElementById(
         "analytics"
     ).innerHTML = `
 
-    <h3>Аналитика</h3>
+        <h3>Аналитика</h3>
 
-    <p>Продажи:
-    ${d.sales_profit}</p>
+        <p>
+            Продажи:
+            ${d.sales_profit}
+        </p>
 
-    <p>Ремонты:
-    ${d.repairs_profit}</p>
+        <p>
+            Ремонты:
+            ${d.repairs_profit}
+        </p>
 
-    <p><b>Итого:
-    ${d.total_profit}</b></p>
+        <p>
+            <b>
+            Итого:
+            ${d.total_profit}
+            </b>
+        </p>
 
-    <button onclick="clearAnalytics()">
-    Очистить аналитику
-    </button>
+        <button onclick="clearAnalytics()">
+            Очистить аналитику
+        </button>
 
-    <hr>
+        <hr>
 
-    ${reportsHtml}
+        <h3>
+            Все ремонты и продажи
+        </h3>
+
+        ${reportsHtml}
     `;
 }
 
@@ -524,6 +668,199 @@ async function clearAnalytics(){
     loadAnalytics();
 }
 
+/* =========================
+PROFILE
+========================= */
+
+function loadProfile(){
+
+    showTab("profile");
+
+    const logged =
+        localStorage.getItem(
+            "crm_logged"
+        );
+
+    const username =
+        localStorage.getItem(
+            "crm_user"
+        );
+
+    if(logged === "1"){
+
+        document
+        .getElementById(
+            "profile"
+        ).innerHTML = `
+
+        <h3>Профиль</h3>
+
+        <p>
+            Вы вошли как:
+            <b>${username}</b>
+        </p>
+
+        <button onclick="logout()">
+            Выйти
+        </button>
+        `;
+
+        return;
+    }
+
+    document
+    .getElementById(
+        "profile"
+    ).innerHTML = `
+
+    <h3>Регистрация</h3>
+
+    <input
+    id="register_username"
+    placeholder="Логин">
+
+    <input
+    id="register_password"
+    type="password"
+    placeholder="Пароль">
+
+    <button onclick="registerNewUser()">
+        Зарегистрироваться
+    </button>
+
+    <hr>
+
+    <h3>Вход</h3>
+
+    <input
+    id="login_username"
+    placeholder="Логин">
+
+    <input
+    id="login_password"
+    type="password"
+    placeholder="Пароль">
+
+    <button onclick="login()">
+        Войти
+    </button>
+    `;
+}
+
+/* =========================
+REGISTER
+========================= */
+
+async function registerNewUser(){
+
+    const username =
+        document
+        .getElementById(
+            "register_username"
+        ).value;
+
+    const password =
+        document
+        .getElementById(
+            "register_password"
+        ).value;
+
+    const res =
+    await fetch("/register",{
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+
+            telegram_id:
+                safeUserId(),
+
+            username,
+            password
+        })
+    });
+
+    const data =
+        await res.json();
+
+    if(!data.ok){
+
+        alert(data.message);
+
+        return;
+    }
+
+    alert("Аккаунт создан");
+}
+
+/* =========================
+LOGIN
+========================= */
+
+async function login(){
+
+    const username =
+        document
+        .getElementById(
+            "login_username"
+        ).value;
+
+    const password =
+        document
+        .getElementById(
+            "login_password"
+        ).value;
+
+    const res =
+    await fetch("/login",{
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+
+            telegram_id:
+                safeUserId(),
+
+            username,
+            password
+        })
+    });
+
+    const data =
+        await res.json();
+
+    if(!data.ok){
+
+        alert(data.message);
+
+        return;
+    }
+
+    localStorage.setItem(
+        "crm_logged",
+        "1"
+    );
+
+    localStorage.setItem(
+        "crm_user",
+        username
+    );
+
+    loadProfile();
+}
+
+/* =========================
+LOGOUT
+========================= */
+
 function logout(){
 
     localStorage.removeItem(
@@ -531,165 +868,15 @@ function logout(){
     );
 
     localStorage.removeItem(
-        "crm_username"
+        "crm_user"
     );
 
     loadProfile();
 }
 
-function loadProfile(){
-
-    showTab("profile");
-
-    const logged =
-    localStorage.getItem(
-        "crm_logged"
-    );
-
-    if(logged){
-
-        const username =
-        localStorage.getItem(
-            "crm_username"
-        );
-
-        document.getElementById(
-            "profile"
-        ).innerHTML = `
-
-        <h3>Профиль</h3>
-
-        <p>${username}</p>
-
-        <button onclick="logout()">
-        Выйти
-        </button>
-        `;
-
-        return;
-    }
-
-    document.getElementById(
-        "profile"
-    ).innerHTML = `
-
-    <h3>Регистрация</h3>
-
-    <input id="reg_username"
-    placeholder="Логин">
-
-    <input id="reg_password"
-    type="password"
-    placeholder="Пароль">
-
-    <button onclick="registerUser()">
-    Зарегистрироваться
-    </button>
-
-    <hr>
-
-    <h3>Логин</h3>
-
-    <input id="login_username"
-    placeholder="Логин">
-
-    <input id="login_password"
-    type="password"
-    placeholder="Пароль">
-
-    <button onclick="loginUser()">
-    Войти
-    </button>
-    `;
-}
-
-async function registerUser(){
-
-    const r = await fetch("/register",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            telegram_id:safeUserId(),
-
-            username:
-            document.getElementById(
-                "reg_username"
-            ).value,
-
-            password:
-            document.getElementById(
-                "reg_password"
-            ).value
-        })
-    });
-
-    const data = await r.json();
-
-    if(data.ok){
-
-        alert("Аккаунт создан");
-
-    }else{
-
-        alert(data.error);
-    }
-}
-
-async function loginUser(){
-
-    const username =
-    document.getElementById(
-        "login_username"
-    ).value;
-
-    const r = await fetch("/login",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            telegram_id:safeUserId(),
-
-            username:username,
-
-            password:
-            document.getElementById(
-                "login_password"
-            ).value
-        })
-    });
-
-    const data = await r.json();
-
-    if(data.ok){
-
-        localStorage.setItem(
-            "crm_logged",
-            "1"
-        );
-
-        localStorage.setItem(
-            "crm_username",
-            username
-        );
-
-        loadProfile();
-
-    }else{
-
-        alert("Ошибка логина");
-    }
-}
+/* =========================
+INIT
+========================= */
 
 renderParts();
 
