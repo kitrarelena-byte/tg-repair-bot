@@ -1,350 +1,11 @@
-```python
-import asyncio
-import logging
-import os
-import hashlib
-from contextlib import asynccontextmanager
-from datetime import datetime
-
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-
-from bot import run_bot
-
-# --- IPARTS ---
-import requests
-from bs4 import BeautifulSoup
-
-# --- PLAYWRIGHT OPTIONAL ---
-try:
-    from playwright.async_api import async_playwright
-    PLAYWRIGHT_AVAILABLE = True
-except:
-    PLAYWRIGHT_AVAILABLE = False
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("main")
-
-# ---------- BOT ----------
-async def safe_bot():
-    try:
-        await run_bot()
-    except Exception as e:
-        logger.exception(e)
-
-# ---------- STORAGE ----------
-USERS = {}
-REPORTS = []
-CACHE = {}
-
-# ---------- MODEL ----------
-class ReportIn(BaseModel):
-    telegram_id: str
-    type: str
-    model: str
-    purchase_price: float = 0
-    repair_cost: float = 0
-    sell_price: float = 0
-
-# ---------- APP ----------
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    asyncio.create_task(safe_bot())
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-# ---------- STATIC ----------
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/")
-async def index():
-    return FileResponse("static/index.html")
-
-# ---------- PASSWORD HASH ----------
-def hash_password(password: str):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# ---------- REGISTER ----------
-@app.post("/register")
-async def register(data: dict):
-
-    tg_id = str(data.get("telegram_id"))
-    username = data.get("username")
-    password = data.get("password")
-
-    if not username or not password:
-        return {"ok": False, "error": "Заполните поля"}
-
-    if tg_id in USERS:
-        return {"ok": False, "error": "Аккаунт уже существует"}
-
-    USERS[tg_id] = {
-        "username": username,
-        "password": hash_password(password),
-        "role": "admin" if len(USERS) == 0 else "user",
-        "created_at": datetime.utcnow().isoformat()
-    }
-
-    return {
-        "ok": True,
-        "user": USERS[tg_id]
-    }
-
-# ---------- LOGIN ----------
-@app.post("/login")
-async def login(data: dict):
-
-    tg_id = str(data.get("telegram_id"))
-    username = data.get("username")
-    password = data.get("password")
-
-    user = USERS.get(tg_id)
-
-    if not user:
-        return {"ok": False, "error": "Пользователь не найден"}
-
-    if user["username"] != username:
-        return {"ok": False, "error": "Неверный логин"}
-
-    if user["password"] != hash_password(password):
-        return {"ok": False, "error": "Неверный пароль"}
-
-    return {
-        "ok": True,
-        "user": {
-            "username": user["username"],
-            "role": user["role"]
-        }
-    }
-
-# ---------- LOGOUT ----------
-@app.post("/logout")
-async def logout(data: dict):
-    return {"ok": True}
-
-# ---------- USER ----------
-@app.get("/user/{telegram_id}")
-async def get_user(telegram_id: str):
-
-    user = USERS.get(telegram_id)
-
-    if not user:
-        return {"exists": False}
-
-    return {
-        "exists": True,
-        "username": user["username"],
-        "role": user["role"]
-    }
-
-# ---------- REPORT ----------
-@app.post("/report")
-async def create_report(data: ReportIn):
-
-    if data.type == "sale":
-        profit = data.sell_price - data.purchase_price - data.repair_cost
-
-    elif data.type == "repair":
-        profit = data.repair_cost - data.purchase_price
-
-    else:
-        profit = 0
-
-    report = {
-        "id": len(REPORTS) + 1,
-        "telegram_id": data.telegram_id,
-        "type": data.type,
-        "model": data.model,
-        "purchase_price": data.purchase_price,
-        "repair_cost": data.repair_cost,
-        "sell_price": data.sell_price,
-        "profit": profit,
-        "created_at": datetime.utcnow().isoformat()
-    }
-
-    REPORTS.append(report)
-
-    return {"ok": True, "profit": profit}
-
-# ---------- ANALYTICS ----------
-@app.get("/analytics")
-async def analytics():
-
-    sales = [r for r in REPORTS if r["type"] == "sale"]
-    repairs = [r for r in REPORTS if r["type"] == "repair"]
-
-    return {
-        "sales_profit": sum(r["profit"] for r in sales),
-        "repairs_profit": sum(r["profit"] for r in repairs),
-        "total_profit": sum(r["profit"] for r in REPORTS)
-    }
-
-# ---------- REPORTS ----------
-@app.get("/reports")
-async def get_reports():
-    return REPORTS
-
-# ---------- CLEAR ANALYTICS ----------
-@app.post("/analytics/clear")
-async def clear_analytics():
-
-    REPORTS.clear()
-
-    return {"ok": True}
-
-# ---------- ADMIN ----------
-@app.get("/admin")
-async def admin():
-    return {
-        "users": USERS,
-        "reports": REPORTS
-    }
-
-# ---------- HEALTH ----------
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-# ---------- IPARTS SEARCH ----------
-@app.get("/parts/search")
-async def search_parts(q: str):
-
-    q = q.strip().lower()
-
-    if q in CACHE:
-        return CACHE[q]
-
-    try:
-        url = f"https://iparts.by/search/?q={q}"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
-        r = requests.get(url, headers=headers, timeout=10)
-
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        items = []
-
-        for el in soup.find_all("div"):
-
-            text = el.get_text(" ", strip=True)
-
-            if "BYN" in text and len(text) < 150:
-
-                items.append({
-                    "name": text[:80],
-                    "price": text.split()[-1]
-                })
-
-            if len(items) >= 5:
-                break
-
-        if items:
-            CACHE[q] = items
-            return items
-
-    except Exception as e:
-        logger.warning("requests failed")
-
-    # ---------- PLAYWRIGHT ----------
-    if PLAYWRIGHT_AVAILABLE:
-
-        try:
-            async with async_playwright() as p:
-
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage"
-                    ]
-                )
-
-                page = await browser.new_page()
-
-                await page.goto(
-                    f"https://iparts.by/search/?q={q}",
-                    timeout=60000
-                )
-
-                await page.wait_for_timeout(4000)
-
-                elements = await page.query_selector_all("div")
-
-                items = []
-
-                for el in elements:
-
-                    text = await el.inner_text()
-
-                    if "BYN" in text and len(text) < 200:
-
-                        lines = text.split("\n")
-
-                        if len(lines) >= 2:
-
-                            items.append({
-                                "name": lines[0],
-                                "price": lines[-1]
-                            })
-
-                    if len(items) >= 10:
-                        break
-
-                await browser.close()
-
-                if items:
-                    CACHE[q] = items
-                    return items
-
-        except Exception as e:
-            logger.exception(e)
-
-    # ---------- FALLBACK ----------
-    return [
-        {
-            "name": f"{q} (iparts не дал данные)",
-            "price": "—"
-        }
-    ]
-
-# ---------- RUN ----------
-if __name__ == "__main__":
-
-    import uvicorn
-
-    port = int(os.getenv("PORT", 8000))
-
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port
-    )
-```
-
----
-
-# `static/index.html`
-
-```html
 <!DOCTYPE html>
 <html>
 <head>
 
 <meta charset="UTF-8">
 
-<meta
-name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
->
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
 
 <title>CRM</title>
 
@@ -354,25 +15,24 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 body{
     margin:0;
-    font-family:Arial;
     background:#0b1220;
     color:white;
+    font-family:Arial;
 }
 
 .tabbar{
     display:flex;
-    overflow-x:auto;
-    background:#111827;
-    padding:10px;
     gap:10px;
+    overflow-x:auto;
+    padding:10px;
+    background:#111827;
 }
 
 .tab{
-    padding:10px 14px;
     background:#1f2937;
+    padding:10px 14px;
     border-radius:10px;
     cursor:pointer;
-    white-space:nowrap;
 }
 
 .container{
@@ -386,35 +46,27 @@ body{
     margin-bottom:15px;
 }
 
-input, select{
+input,select{
     width:100%;
-    padding:10px;
-    margin-top:8px;
-    border-radius:8px;
+    margin-top:10px;
+    padding:12px;
     border:none;
-    box-sizing:border-box;
+    border-radius:10px;
 }
 
 button{
-    margin-top:10px;
-    padding:12px;
     width:100%;
-    border-radius:10px;
+    padding:12px;
+    margin-top:10px;
     border:none;
+    border-radius:10px;
     background:#22c55e;
+    color:white;
     font-weight:bold;
-    cursor:pointer;
 }
 
 .del{
     background:#ef4444;
-}
-
-li{
-    padding:10px;
-    background:#1f2937;
-    margin-top:6px;
-    border-radius:8px;
 }
 
 .hidden{
@@ -424,118 +76,89 @@ li{
 .search-card{
     background:#1f2937;
     padding:10px;
-    margin-top:8px;
     border-radius:10px;
+    margin-top:10px;
 }
 
 </style>
+
 </head>
 
 <body>
 
 <div class="tabbar">
 
-    <div class="tab" onclick="showTab('sale')">
-        📊 Продажа
-    </div>
+<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
 
-    <div class="tab" onclick="showTab('repair')">
-        🛠 Ремонт
-    </div>
+<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
 
-    <div class="tab" onclick="showTab('parts')">
-        🔩 Запчасти
-    </div>
+<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
 
-    <div class="tab" onclick="loadAnalytics()">
-        📈 Аналитика
-    </div>
+<div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
 
-    <div class="tab" onclick="loadProfile()">
-        👤 Профиль
-    </div>
-
-    <div class="tab" onclick="loadAdmin()">
-        ⚙️ Админ
-    </div>
+<div class="tab" onclick="loadProfile()">👤 Профиль</div>
 
 </div>
 
 <div class="container">
 
-<!-- SALE -->
 <div id="sale" class="card">
 
-    <h3>Продажа</h3>
+<h3>Продажа</h3>
 
-    <input id="sale_model" placeholder="Модель">
+<input id="sale_model" placeholder="Модель">
 
-    <input id="sale_purchase" placeholder="Цена покупки">
+<input id="sale_purchase" placeholder="Цена покупки">
 
-    <input id="sale_repair" placeholder="Цена ремонта">
+<input id="sale_repair" placeholder="Цена ремонта">
 
-    <input id="sale_sell" placeholder="Цена продажи">
+<input id="sale_sell" placeholder="Цена продажи">
 
-    <button onclick="sendSale()">
-        Сохранить
-    </button>
+<button onclick="sendSale()">Сохранить</button>
 
-    <div id="sale_profit"></div>
+<div id="sale_profit"></div>
 
 </div>
 
-<!-- REPAIR -->
 <div id="repair" class="card hidden">
 
-    <h3>Ремонт</h3>
+<h3>Ремонт</h3>
 
-    <input id="repair_model" placeholder="Модель">
+<input id="repair_model" placeholder="Модель">
 
-    <select id="parts_select" multiple></select>
+<select id="parts_select" multiple></select>
 
-    <input id="repair_price" placeholder="Цена работы">
+<input id="repair_price" placeholder="Цена работы">
 
-    <button onclick="sendRepair()">
-        Сохранить
-    </button>
+<button onclick="sendRepair()">Сохранить</button>
 
 </div>
 
-<!-- PARTS -->
 <div id="parts" class="card hidden">
 
-    <h3>Запчасти</h3>
+<h3>Запчасти</h3>
 
-    <input id="part_name" placeholder="Название">
+<input id="part_name" placeholder="Название">
 
-    <input id="part_price" placeholder="Цена">
+<input id="part_price" placeholder="Цена">
 
-    <button onclick="addPart()">
-        Добавить
-    </button>
+<button onclick="addPart()">Добавить</button>
 
-    <hr>
+<hr>
 
-    <input id="search_query" placeholder="Поиск iparts">
+<input id="search_query" placeholder="Поиск iparts">
 
-    <button onclick="searchParts()">
-        Найти
-    </button>
+<button onclick="searchParts()">Найти</button>
 
-    <div id="search_results"></div>
+<div id="search_results"></div>
 
-    <ul id="parts_list"></ul>
+<ul id="parts_list"></ul>
 
 </div>
 
-<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
-<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
-
-<!-- ADMIN -->
-<div id="admin" class="card hidden"></div>
 
 </div>
 
@@ -549,9 +172,29 @@ if(tg){
 }
 
 function safeUserId(){
-    return String(
-        tg?.initDataUnsafe?.user?.id || "0"
-    );
+
+    const user = tg?.initDataUnsafe?.user;
+
+    if(user && user.id){
+        return String(user.id);
+    }
+
+    let localId =
+    localStorage.getItem("local_user_id");
+
+    if(!localId){
+
+        localId =
+        "web_" +
+        Math.random().toString(36).slice(2);
+
+        localStorage.setItem(
+            "local_user_id",
+            localId
+        );
+    }
+
+    return localId;
 }
 
 function showTab(tab){
@@ -561,23 +204,19 @@ function showTab(tab){
         "repair",
         "parts",
         "analytics",
-        "profile",
-        "admin"
-    ].forEach(id => {
+        "profile"
+    ].forEach(id=>{
 
-        const el =
-        document.getElementById(id);
+        document
+        .getElementById(id)
+        .classList.add("hidden");
 
-        if(el)
-            el.classList.add("hidden");
     });
 
     document
-        .getElementById(tab)
-        .classList.remove("hidden");
+    .getElementById(tab)
+    .classList.remove("hidden");
 }
-
-/* ---------- PARTS ---------- */
 
 let parts =
 JSON.parse(
@@ -638,17 +277,24 @@ function renderParts(){
         opt.text = p.name;
 
         select.appendChild(opt);
+
     });
 }
 
 function addPart(){
 
     parts.push({
+
         name:
-        document.getElementById("part_name").value,
+        document.getElementById(
+            "part_name"
+        ).value,
 
         price:
-        document.getElementById("part_price").value
+        document.getElementById(
+            "part_price"
+        ).value
+
     });
 
     saveParts();
@@ -656,12 +302,12 @@ function addPart(){
     renderParts();
 }
 
-/* ---------- IPARTS ---------- */
-
 async function searchParts(){
 
     const q =
-    document.getElementById("search_query").value;
+    document.getElementById(
+        "search_query"
+    ).value;
 
     const r =
     await fetch(
@@ -673,11 +319,13 @@ async function searchParts(){
     await r.json();
 
     const container =
-    document.getElementById("search_results");
+    document.getElementById(
+        "search_results"
+    );
 
     container.innerHTML = "";
 
-    data.forEach(p => {
+    data.forEach(p=>{
 
         const div =
         document.createElement("div");
@@ -685,10 +333,9 @@ async function searchParts(){
         div.className =
         "search-card";
 
-        div.innerHTML = `
-            <b>${p.name}</b><br>
-            <small>${p.price}</small><br>
-        `;
+        div.innerHTML =
+        `<b>${p.name}</b><br>
+        <small>${p.price}</small>`;
 
         const btn =
         document.createElement("button");
@@ -710,15 +357,13 @@ async function searchParts(){
         div.appendChild(btn);
 
         container.appendChild(div);
+
     });
 }
 
-/* ---------- SALE ---------- */
-
 async function sendSale(){
 
-    const res =
-    await fetch("/report",{
+    const r = await fetch("/report",{
 
         method:"POST",
 
@@ -733,43 +378,50 @@ async function sendSale(){
             type:"sale",
 
             model:
-            document.getElementById("sale_model").value,
+            document.getElementById(
+                "sale_model"
+            ).value,
 
             purchase_price:Number(
-                document.getElementById("sale_purchase").value
+                document.getElementById(
+                    "sale_purchase"
+                ).value
             ),
 
             repair_cost:Number(
-                document.getElementById("sale_repair").value
+                document.getElementById(
+                    "sale_repair"
+                ).value
             ),
 
             sell_price:Number(
-                document.getElementById("sale_sell").value
+                document.getElementById(
+                    "sale_sell"
+                ).value
             )
         })
     });
 
-    const r =
-    await res.json();
+    const data = await r.json();
 
     document.getElementById(
         "sale_profit"
     ).innerText =
-    "Profit: " + r.profit;
+    "Profit: " + data.profit;
 }
-
-/* ---------- REPAIR ---------- */
 
 async function sendRepair(){
 
     const selected =
-    [...document.getElementById("parts_select").selectedOptions]
-    .map(o => JSON.parse(o.value));
+    [...document.getElementById(
+        "parts_select"
+    ).selectedOptions]
+    .map(o=>JSON.parse(o.value));
 
-    let partsSum = 0;
+    let sum = 0;
 
-    selected.forEach(p => {
-        partsSum += Number(p.price);
+    selected.forEach(p=>{
+        sum += Number(p.price);
     });
 
     await fetch("/report",{
@@ -787,12 +439,16 @@ async function sendRepair(){
             type:"repair",
 
             model:
-            document.getElementById("repair_model").value,
+            document.getElementById(
+                "repair_model"
+            ).value,
 
-            purchase_price:partsSum,
+            purchase_price:sum,
 
             repair_cost:Number(
-                document.getElementById("repair_price").value
+                document.getElementById(
+                    "repair_price"
+                ).value
             ),
 
             sell_price:0
@@ -801,8 +457,6 @@ async function sendRepair(){
 
     alert("Сохранено");
 }
-
-/* ---------- ANALYTICS ---------- */
 
 async function loadAnalytics(){
 
@@ -822,14 +476,14 @@ async function loadAnalytics(){
 
     let reportsHtml = "";
 
-    reports.forEach(rep => {
+    reports.forEach(r=>{
 
         reportsHtml += `
-        <li>
-            ${rep.type} |
-            ${rep.model} |
-            ${rep.profit}
-        </li>
+        <div class="search-card">
+            <b>${r.type}</b><br>
+            ${r.model}<br>
+            Profit: ${r.profit}
+        </div>
         `;
     });
 
@@ -839,65 +493,65 @@ async function loadAnalytics(){
 
     <h3>Аналитика</h3>
 
-    <p>
-        Продажи:
-        ${d.sales_profit || 0}
-    </p>
+    <p>Продажи:
+    ${d.sales_profit}</p>
 
-    <p>
-        Ремонты:
-        ${d.repairs_profit || 0}
-    </p>
+    <p>Ремонты:
+    ${d.repairs_profit}</p>
 
-    <p>
-        <b>
-        Итого:
-        ${d.total_profit || 0}
-        </b>
-    </p>
+    <p><b>Итого:
+    ${d.total_profit}</b></p>
 
-    <button
-        class="del"
-        onclick="clearAnalytics()"
-    >
-        Очистить аналитику
+    <button onclick="clearAnalytics()">
+    Очистить аналитику
     </button>
 
-    <h3>
-        Все ремонты и продажи
-    </h3>
+    <hr>
 
-    <ul>
-        ${reportsHtml}
-    </ul>
+    ${reportsHtml}
     `;
 }
 
 async function clearAnalytics(){
 
-    await fetch("/analytics/clear",{
-        method:"POST"
-    });
+    await fetch(
+        "/analytics/clear",
+        {
+            method:"POST"
+        }
+    );
 
     loadAnalytics();
 }
 
-/* ---------- PROFILE ---------- */
+function logout(){
 
-async function loadProfile(){
+    localStorage.removeItem(
+        "crm_logged"
+    );
+
+    localStorage.removeItem(
+        "crm_username"
+    );
+
+    loadProfile();
+}
+
+function loadProfile(){
 
     showTab("profile");
 
-    const tgId =
-    safeUserId();
+    const logged =
+    localStorage.getItem(
+        "crm_logged"
+    );
 
-    const r =
-    await fetch("/user/" + tgId);
+    if(logged){
 
-    const data =
-    await r.json();
-
-    if(data.exists){
+        const username =
+        localStorage.getItem(
+            "crm_username"
+        );
 
         document.getElementById(
             "profile"
@@ -905,17 +559,10 @@ async function loadProfile(){
 
         <h3>Профиль</h3>
 
-        <p>ID: ${tgId}</p>
+        <p>${username}</p>
 
-        <p>Логин: ${data.username}</p>
-
-        <p>Роль: ${data.role}</p>
-
-        <button
-            onclick="logoutUser()"
-            class="del"
-        >
-            Выйти
+        <button onclick="logout()">
+        Выйти
         </button>
         `;
 
@@ -928,46 +575,37 @@ async function loadProfile(){
 
     <h3>Регистрация</h3>
 
-    <input
-        id="reg_login"
-        placeholder="Логин"
-    >
+    <input id="reg_username"
+    placeholder="Логин">
 
-    <input
-        id="reg_password"
-        type="password"
-        placeholder="Пароль"
-    >
+    <input id="reg_password"
+    type="password"
+    placeholder="Пароль">
 
     <button onclick="registerUser()">
-        Зарегистрироваться
+    Зарегистрироваться
     </button>
 
     <hr>
 
-    <h3>Вход</h3>
+    <h3>Логин</h3>
 
-    <input
-        id="login_login"
-        placeholder="Логин"
-    >
+    <input id="login_username"
+    placeholder="Логин">
 
-    <input
-        id="login_password"
-        type="password"
-        placeholder="Пароль"
-    >
+    <input id="login_password"
+    type="password"
+    placeholder="Пароль">
 
     <button onclick="loginUser()">
-        Войти
+    Войти
     </button>
     `;
 }
 
 async function registerUser(){
 
-    const res =
-    await fetch("/register",{
+    const r = await fetch("/register",{
 
         method:"POST",
 
@@ -980,30 +618,37 @@ async function registerUser(){
             telegram_id:safeUserId(),
 
             username:
-            document.getElementById("reg_login").value,
+            document.getElementById(
+                "reg_username"
+            ).value,
 
             password:
-            document.getElementById("reg_password").value
+            document.getElementById(
+                "reg_password"
+            ).value
         })
     });
 
-    const data =
-    await res.json();
+    const data = await r.json();
 
-    if(!data.ok){
+    if(data.ok){
+
+        alert("Аккаунт создан");
+
+    }else{
 
         alert(data.error);
-
-        return;
     }
-
-    loadProfile();
 }
 
 async function loginUser(){
 
-    const res =
-    await fetch("/login",{
+    const username =
+    document.getElementById(
+        "login_username"
+    ).value;
+
+    const r = await fetch("/login",{
 
         method:"POST",
 
@@ -1015,87 +660,36 @@ async function loginUser(){
 
             telegram_id:safeUserId(),
 
-            username:
-            document.getElementById("login_login").value,
+            username:username,
 
             password:
-            document.getElementById("login_password").value
+            document.getElementById(
+                "login_password"
+            ).value
         })
     });
 
-    const data =
-    await res.json();
+    const data = await r.json();
 
-    if(!data.ok){
+    if(data.ok){
 
-        alert(data.error);
+        localStorage.setItem(
+            "crm_logged",
+            "1"
+        );
 
-        return;
+        localStorage.setItem(
+            "crm_username",
+            username
+        );
+
+        loadProfile();
+
+    }else{
+
+        alert("Ошибка логина");
     }
-
-    loadProfile();
 }
-
-async function logoutUser(){
-
-    await fetch("/logout",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-            telegram_id:safeUserId()
-        })
-    });
-
-    location.reload();
-}
-
-/* ---------- ADMIN ---------- */
-
-async function loadAdmin(){
-
-    showTab("admin");
-
-    const r =
-    await fetch("/admin");
-
-    const d =
-    await r.json();
-
-    let users = "";
-
-    for(let id in d.users){
-
-        const u = d.users[id];
-
-        users += `
-        <p>
-            ${u.username}
-            (${u.role})
-        </p>
-        `;
-    }
-
-    document.getElementById(
-        "admin"
-    ).innerHTML = `
-
-    <h3>Админ</h3>
-
-    ${users}
-
-    <p>
-        Отчетов:
-        ${d.reports.length}
-    </p>
-    `;
-}
-
-/* ---------- INIT ---------- */
 
 renderParts();
 
@@ -1103,4 +697,3 @@ renderParts();
 
 </body>
 </html>
-```
