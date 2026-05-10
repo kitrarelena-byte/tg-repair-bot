@@ -1,10 +1,15 @@
+<!-- static/index.html -->
+
 <!DOCTYPE html>
 <html>
 <head>
+
 <meta charset="UTF-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+/>
 
 <title>CRM</title>
 
@@ -12,86 +17,78 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 <style>
 
-html, body {
-    touch-action: manipulation;
-    overscroll-behavior: none;
+html, body{
+touch-action: manipulation;
+overscroll-behavior: none;
 }
 
 body{
-    margin:0;
-    background:#0b1220;
-    color:white;
-    font-family:Arial;
+margin:0;
+font-family:Arial;
+background:#0b1220;
+color:white;
 }
 
-/* TOP */
 .tabbar{
-    display:flex;
-    overflow-x:auto;
-    gap:10px;
-    padding:10px;
-    background:#111827;
+display:flex;
+overflow-x:auto;
+background:#111827;
+padding:10px;
+gap:10px;
 }
 
 .tab{
-    background:#1f2937;
-    padding:10px 14px;
-    border-radius:10px;
-    cursor:pointer;
-    white-space:nowrap;
+padding:10px 14px;
+background:#1f2937;
+border-radius:10px;
+cursor:pointer;
+white-space:nowrap;
 }
 
 .container{
-    padding:15px;
+padding:15px;
 }
 
 .card{
-    background:#111827;
-    border-radius:14px;
-    padding:15px;
-    margin-bottom:15px;
-}
-
-.hidden{
-    display:none;
+background:#111827;
+padding:15px;
+border-radius:14px;
+margin-bottom:15px;
 }
 
 input, select{
-    width:100%;
-    margin-top:8px;
-    padding:10px;
-    border:none;
-    border-radius:8px;
-    box-sizing:border-box;
+width:100%;
+padding:10px;
+margin-top:8px;
+border-radius:8px;
+border:none;
+box-sizing:border-box;
 }
 
 button{
-    width:100%;
-    margin-top:10px;
-    padding:12px;
-    border:none;
-    border-radius:10px;
-    background:#22c55e;
-    font-weight:bold;
-    cursor:pointer;
+margin-top:10px;
+padding:12px;
+width:100%;
+border-radius:10px;
+border:none;
+background:#22c55e;
+font-weight:bold;
+cursor:pointer;
 }
 
 .del{
-    background:#ef4444;
+background:#ef4444;
+}
+
+.hidden{
+display:none;
 }
 
 .search-card{
-    background:#1f2937;
-    padding:10px;
-    margin-top:10px;
-    border-radius:10px;
-}
-
-.user-card{
-    background:#1f2937;
-    padding:10px;
-    border-radius:10px;
-    margin-top:10px;
+background:#1f2937;
+padding:10px;
+margin-top:8px;
+border-radius:10px;
 }
 
 </style>
@@ -100,55 +97,18 @@ button{
 <body>
 
 <div class="tabbar">
-
-<div class="tab" onclick="showTab('sale')">
-📊 Продажа
-</div>
-
-<div class="tab" onclick="showTab('repair')">
-🛠 Ремонт
-</div>
-
-<div class="tab" onclick="showTab('parts')">
-🔩 Запчасти
-</div>
-
-<div class="tab" onclick="loadAnalytics()">
-📈 Аналитика
-</div>
-
-<div class="tab" onclick="loadProfile()">
-👤 Профиль
-</div>
-
-<div class="tab" onclick="loadAdmin()">
-⚙️ Админ
-</div>
-
+<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+<div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
+<div class="tab" onclick="loadProfile()">👤 Профиль</div>
+<div class="tab" onclick="loadAdmin()">⚙️ Админ</div>
 </div>
 
 <div class="container">
 
-<!-- AUTH -->
-<div id="auth" class="card">
-
-<h3>Вход / Регистрация</h3>
-
-<input id="auth_username" placeholder="Логин">
-<input id="auth_password" type="password" placeholder="Пароль">
-
-<button onclick="registerUser()">
-Регистрация
-</button>
-
-<button onclick="loginUser()">
-Войти
-</button>
-
-</div>
-
 <!-- SALE -->
-<div id="sale" class="card hidden">
+<div id="sale" class="card">
 
 <h3>Продажа</h3>
 
@@ -191,6 +151,7 @@ button{
 <h3>Запчасти</h3>
 
 <input id="part_name" placeholder="Название">
+
 <input id="part_price" placeholder="Цена">
 
 <button onclick="addPart()">
@@ -226,625 +187,557 @@ button{
 
 const tg = window.Telegram?.WebApp;
 
-if (tg){
-    tg.ready();
-    tg.expand();
+if(tg){
+tg.ready();
+tg.expand();
 }
 
-document.addEventListener('gesturestart', e => e.preventDefault());
+function safeUserId(){
+return tg?.initDataUnsafe?.user?.id || "0";
+}
 
-let currentUser = JSON.parse(
-    localStorage.getItem("crm_user") || "null"
-);
+function storageKey(){
+return "crm_user_" + safeUserId();
+}
 
-/* =========================
-TABS
-========================= */
+function getCurrentUser(){
+return JSON.parse(localStorage.getItem(storageKey()));
+}
 
 function showTab(tab){
 
-    [
-        "sale",
-        "repair",
-        "parts",
-        "analytics",
-        "profile",
-        "admin"
-    ].forEach(id => {
+const user = getCurrentUser();
 
-        document
-            .getElementById(id)
-            .classList.add("hidden");
-
-    });
-
-    document
-        .getElementById(tab)
-        .classList.remove("hidden");
+if(!user && tab !== "profile"){
+loadProfile();
+return;
 }
 
-/* =========================
-AUTH
-========================= */
+[
+"sale",
+"repair",
+"parts",
+"analytics",
+"profile",
+"admin"
+].forEach(id=>{
+document.getElementById(id).classList.add("hidden");
+});
 
-function updateAuthUI(){
-
-    if(currentUser){
-
-        document
-            .getElementById("auth")
-            .classList.add("hidden");
-
-    }else{
-
-        document
-            .getElementById("auth")
-            .classList.remove("hidden");
-    }
+document.getElementById(tab).classList.remove("hidden");
 }
 
-async function registerUser(){
-
-    const username =
-        document.getElementById("auth_username").value;
-
-    const password =
-        document.getElementById("auth_password").value;
-
-    const r = await fetch("/register",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            telegram_id:
-                tg?.initDataUnsafe?.user?.id || "0",
-
-            username,
-            password
-        })
-    });
-
-    const data = await r.json();
-
-    if(!r.ok){
-        alert(data.detail);
-        return;
-    }
-
-    currentUser = data.user;
-
-    localStorage.setItem(
-        "crm_user",
-        JSON.stringify(currentUser)
-    );
-
-    updateAuthUI();
-
-    alert("Аккаунт создан");
-}
-
-async function loginUser(){
-
-    const username =
-        document.getElementById("auth_username").value;
-
-    const password =
-        document.getElementById("auth_password").value;
-
-    const r = await fetch("/login",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-            username,
-            password
-        })
-    });
-
-    const data = await r.json();
-
-    if(!r.ok){
-
-        alert(data.detail);
-        return;
-    }
-
-    currentUser = data.user;
-
-    localStorage.setItem(
-        "crm_user",
-        JSON.stringify(currentUser)
-    );
-
-    updateAuthUI();
-
-    alert("Вход выполнен");
-}
-
-function logout(){
-
-    localStorage.removeItem("crm_user");
-
-    currentUser = null;
-
-    updateAuthUI();
-
-    location.reload();
-}
-
-/* =========================
+/* =========================================
 PARTS
-========================= */
+========================================= */
 
-let parts = JSON.parse(
-    localStorage.getItem("parts") || "[]"
-);
+let parts =
+JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts(){
-
-    localStorage.setItem(
-        "parts",
-        JSON.stringify(parts)
-    );
+localStorage.setItem("parts", JSON.stringify(parts));
 }
 
 function renderParts(){
 
-    const list =
-        document.getElementById("parts_list");
+const list = document.getElementById("parts_list");
 
-    const select =
-        document.getElementById("parts_select");
+const select =
+document.getElementById("parts_select");
 
-    list.innerHTML = "";
-    select.innerHTML = "";
+list.innerHTML = "";
+select.innerHTML = "";
 
-    parts.forEach((p,i)=>{
+parts.forEach((p,i)=>{
 
-        const li = document.createElement("li");
+const li = document.createElement("li");
 
-        li.innerHTML = `
-            ${p.name} - ${p.price}
-        `;
+li.innerHTML = `${p.name} - ${p.price}`;
 
-        const del = document.createElement("button");
+const del = document.createElement("button");
 
-        del.className = "del";
+del.innerText = "Удалить";
 
-        del.innerText = "Удалить";
+del.className = "del";
 
-        del.onclick = ()=>{
+del.onclick = ()=>{
 
-            parts.splice(i,1);
+parts.splice(i,1);
 
-            saveParts();
+saveParts();
 
-            renderParts();
-        };
+renderParts();
+};
 
-        li.appendChild(del);
+li.appendChild(del);
 
-        list.appendChild(li);
+list.appendChild(li);
 
-        const opt = document.createElement("option");
+const opt = document.createElement("option");
 
-        opt.value = JSON.stringify(p);
+opt.value = JSON.stringify(p);
 
-        opt.text = p.name;
+opt.text = p.name;
 
-        select.appendChild(opt);
-    });
+select.appendChild(opt);
+
+});
 }
 
 function addPart(){
 
-    parts.push({
+parts.push({
+name:document.getElementById("part_name").value,
+price:document.getElementById("part_price").value
+});
 
-        name:
-            document.getElementById("part_name").value,
+saveParts();
 
-        price:
-            document.getElementById("part_price").value
-    });
-
-    saveParts();
-
-    renderParts();
+renderParts();
 }
 
-/* =========================
+/* =========================================
 IPARTS
-========================= */
+========================================= */
 
 async function searchParts(){
 
-    const q =
-        document.getElementById("search_query").value;
+const q =
+document.getElementById("search_query").value;
 
-    const r = await fetch(
-        "/parts/search?q=" + encodeURIComponent(q)
-    );
+const r =
+await fetch("/parts/search?q=" + encodeURIComponent(q));
 
-    const data = await r.json();
+const data = await r.json();
 
-    const container =
-        document.getElementById("search_results");
+const container =
+document.getElementById("search_results");
 
-    container.innerHTML = "";
+container.innerHTML = "";
 
-    data.forEach(p=>{
+data.forEach(p=>{
 
-        const div = document.createElement("div");
+const div = document.createElement("div");
 
-        div.className = "search-card";
+div.className = "search-card";
 
-        div.innerHTML = `
-            <b>${p.name}</b><br>
-            ${p.price}
-        `;
+div.innerHTML = `
+<b>${p.name}</b><br>
+${p.price}
+`;
 
-        const btn = document.createElement("button");
+const btn = document.createElement("button");
 
-        btn.innerText = "Добавить";
+btn.innerText = "Добавить";
 
-        btn.onclick = ()=>{
+btn.onclick = ()=>{
 
-            parts.push({
-                name:p.name,
-                price:p.price
-            });
+parts.push({
+name:p.name,
+price:p.price
+});
 
-            saveParts();
+saveParts();
 
-            renderParts();
-        };
+renderParts();
+};
 
-        div.appendChild(btn);
+div.appendChild(btn);
 
-        container.appendChild(div);
-    });
+container.appendChild(div);
+
+});
 }
 
-/* =========================
+/* =========================================
 SALE
-========================= */
+========================================= */
 
 async function sendSale(){
 
-    if(!currentUser){
-        alert("Войди");
-        return;
-    }
+const res = await fetch("/report",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+type:"sale",
+model:document.getElementById("sale_model").value,
+purchase_price:Number(document.getElementById("sale_purchase").value),
+repair_cost:Number(document.getElementById("sale_repair").value),
+sell_price:Number(document.getElementById("sale_sell").value)
+})
+});
 
-    const res = await fetch("/report",{
+const r = await res.json();
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            telegram_id:currentUser.telegram_id,
-
-            type:"sale",
-
-            model:
-                document.getElementById("sale_model").value,
-
-            purchase_price:Number(
-                document.getElementById("sale_purchase").value
-            ),
-
-            repair_cost:Number(
-                document.getElementById("sale_repair").value
-            ),
-
-            sell_price:Number(
-                document.getElementById("sale_sell").value
-            )
-        })
-    });
-
-    const data = await res.json();
-
-    if(!res.ok){
-        alert(data.detail);
-        return;
-    }
-
-    document.getElementById("sale_profit")
-        .innerText = "Profit: " + data.profit;
+if(r.detail){
+alert(r.detail);
+return;
 }
 
-/* =========================
+document.getElementById("sale_profit").innerText =
+"Profit: " + r.profit;
+}
+
+/* =========================================
 REPAIR
-========================= */
+========================================= */
 
 async function sendRepair(){
 
-    if(!currentUser){
-        alert("Войди");
-        return;
-    }
+const selected =
+[...document.getElementById("parts_select").selectedOptions]
+.map(o=>JSON.parse(o.value));
 
-    const selected =
-        [...document.getElementById("parts_select").selectedOptions]
-        .map(o=>JSON.parse(o.value));
+let partsSum = 0;
 
-    let sum = 0;
+selected.forEach(p=>{
+partsSum += Number(p.price);
+});
 
-    selected.forEach(p=>{
-        sum += Number(p.price);
-    });
+const res = await fetch("/report",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+type:"repair",
+model:document.getElementById("repair_model").value,
+purchase_price:partsSum,
+repair_cost:Number(document.getElementById("repair_price").value),
+sell_price:0
+})
+});
 
-    const r = await fetch("/report",{
+const r = await res.json();
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            telegram_id:currentUser.telegram_id,
-
-            type:"repair",
-
-            model:
-                document.getElementById("repair_model").value,
-
-            purchase_price:sum,
-
-            repair_cost:Number(
-                document.getElementById("repair_price").value
-            ),
-
-            sell_price:0
-        })
-    });
-
-    const data = await r.json();
-
-    if(!r.ok){
-        alert(data.detail);
-        return;
-    }
-
-    alert("Сохранено");
+if(r.detail){
+alert(r.detail);
+return;
 }
 
-/* =========================
+alert("Сохранено");
+}
+
+/* =========================================
 ANALYTICS
-========================= */
+========================================= */
 
 async function loadAnalytics(){
 
-    showTab("analytics");
+showTab("analytics");
 
-    const r = await fetch("/analytics");
+const r = await fetch("/analytics");
 
-    const d = await r.json();
+const d = await r.json();
 
-    const rr = await fetch("/reports");
+const reportsRes = await fetch("/reports");
 
-    const reports = await rr.json();
+const reports = await reportsRes.json();
 
-    let history = "";
+let history = "";
 
-    reports.reverse().forEach(r=>{
+reports.reverse().forEach(r=>{
 
-        history += `
-        <div class="search-card">
-            <b>${r.type}</b><br>
-            ${r.model}<br>
-            Profit: ${r.profit}
-        </div>
-        `;
-    });
+history += `
 
-    document.getElementById("analytics").innerHTML = `
+<div class="search-card">
 
-        <h3>Аналитика</h3>
+<b>${r.type.toUpperCase()}</b><br>
 
-        <p>Продажи: ${d.sales_profit}</p>
+Модель: ${r.model}<br>
 
-        <p>Ремонты: ${d.repairs_profit}</p>
+Профит: ${r.profit}<br>
 
-        <p><b>Итого: ${d.total_profit}</b></p>
+Дата: ${r.created_at}
 
-        <button onclick="clearAnalytics()">
-        Очистить аналитику
-        </button>
+</div>
 
-        <h3>История</h3>
+`;
 
-        ${history}
-    `;
+});
+
+document.getElementById("analytics").innerHTML = `
+
+<h3>Аналитика</h3>
+
+<p>Продажи: ${d.sales_profit}</p>
+
+<p>Ремонт: ${d.repairs_profit}</p>
+
+<p><b>Итого: ${d.total_profit}</b></p>
+
+<button onclick="clearAnalytics()" class="del">
+Очистить аналитику
+</button>
+
+<hr>
+
+<h3>История</h3>
+
+${history}
+
+`;
 }
 
 async function clearAnalytics(){
 
-    await fetch("/analytics/clear",{
-        method:"POST"
-    });
+await fetch("/clear-reports",{
+method:"POST"
+});
 
-    loadAnalytics();
+loadAnalytics();
 }
 
-/* =========================
+/* =========================================
+AUTH
+========================================= */
+
+function logout(){
+
+localStorage.removeItem(storageKey());
+
+loadProfile();
+}
+
+async function register(){
+
+const username =
+document.getElementById("reg_username").value;
+
+const password =
+document.getElementById("reg_password").value;
+
+const res = await fetch("/register",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+username,
+password
+})
+});
+
+const data = await res.json();
+
+if(data.detail){
+alert(data.detail);
+return;
+}
+
+localStorage.setItem(
+storageKey(),
+JSON.stringify(data)
+);
+
+loadProfile();
+}
+
+async function login(){
+
+const username =
+document.getElementById("login_username").value;
+
+const password =
+document.getElementById("login_password").value;
+
+const res = await fetch("/login",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+username,
+password
+})
+});
+
+const data = await res.json();
+
+if(data.detail){
+alert(data.detail);
+return;
+}
+
+localStorage.setItem(
+storageKey(),
+JSON.stringify(data)
+);
+
+loadProfile();
+}
+
+/* =========================================
 PROFILE
-========================= */
+========================================= */
 
 function loadProfile(){
 
-    showTab("profile");
+showTab("profile");
 
-    if(!currentUser){
+const user = getCurrentUser();
 
-        document.getElementById("profile").innerHTML =
-        `<h3>Не авторизован</h3>`;
+if(user){
 
-        return;
-    }
+if(user.blocked){
 
-    document.getElementById("profile").innerHTML = `
+document.getElementById("profile").innerHTML = `
 
-        <h3>Профиль</h3>
+<h3>Аккаунт заблокирован</h3>
 
-        <p>Логин: ${currentUser.username}</p>
+<button onclick="logout()" class="del">
+Выйти
+</button>
 
-        <p>Роль: ${currentUser.role}</p>
+`;
 
-        <button class="del" onclick="logout()">
-        Выйти
-        </button>
-    `;
+return;
 }
 
-/* =========================
+document.getElementById("profile").innerHTML = `
+
+<h3>Профиль</h3>
+
+<p>Логин: ${user.username}</p>
+
+<p>Роль: ${user.role}</p>
+
+<button onclick="logout()" class="del">
+Выйти
+</button>
+
+`;
+
+}else{
+
+document.getElementById("profile").innerHTML = `
+
+<h3>Регистрация</h3>
+
+<input id="reg_username" placeholder="Логин">
+
+<input
+id="reg_password"
+type="password"
+placeholder="Пароль"
+>
+
+<button onclick="register()">
+Создать аккаунт
+</button>
+
+<hr>
+
+<h3>Вход</h3>
+
+<input id="login_username" placeholder="Логин">
+
+<input
+id="login_password"
+type="password"
+placeholder="Пароль"
+>
+
+<button onclick="login()">
+Войти
+</button>
+
+`;
+}
+}
+
+/* =========================================
 ADMIN
-========================= */
+========================================= */
 
 async function loadAdmin(){
 
-    showTab("admin");
+showTab("admin");
 
-    if(!currentUser || currentUser.role !== "admin"){
+const user = getCurrentUser();
 
-        document.getElementById("admin").innerHTML =
-        `<h3>Нет доступа</h3>`;
+if(!user || user.role !== "admin"){
 
-        return;
-    }
+document.getElementById("admin").innerHTML =
+"<h3>Нет доступа</h3>";
 
-    const r = await fetch("/admin");
+return;
+}
 
-    const d = await r.json();
+const r = await fetch("/users");
 
-    let users = "";
+const users = await r.json();
 
-    for(let id in d.users){
+let html = "<h3>Пользователи</h3>";
 
-        const u = d.users[id];
+users.forEach(u=>{
 
-        users += `
+html += `
 
-        <div class="user-card">
+<div class="search-card">
 
-            <b>${u.username}</b><br>
+<b>${u.username}</b><br>
 
-            role: ${u.role}<br>
+Role: ${u.role}<br>
 
-            blocked: ${u.blocked}
+Blocked: ${u.blocked}<br>
 
-            <button onclick="blockUser('${u.username}')">
-            Блок
-            </button>
+<button onclick="blockUser('${u.username}')">
+Блок
+</button>
 
-            <button onclick="unblockUser('${u.username}')">
-            Разблок
-            </button>
+<button onclick="unblockUser('${u.username}')">
+Разблок
+</button>
 
-            <button class="del"
-            onclick="deleteUser('${u.username}')">
+</div>
 
-            Удалить
-            </button>
+`;
 
-        </div>
-        `;
-    }
+});
 
-    document.getElementById("admin").innerHTML = `
-        <h3>Админка</h3>
-        ${users}
-    `;
+document.getElementById("admin").innerHTML = html;
 }
 
 async function blockUser(username){
 
-    await fetch("/admin/block",{
+await fetch("/admin/block",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({username})
+});
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            admin_username:currentUser.username,
-
-            target:username
-        })
-    });
-
-    loadAdmin();
+loadAdmin();
 }
 
 async function unblockUser(username){
 
-    await fetch("/admin/unblock",{
+await fetch("/admin/unblock",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({username})
+});
 
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            admin_username:currentUser.username,
-
-            target:username
-        })
-    });
-
-    loadAdmin();
+loadAdmin();
 }
 
-async function deleteUser(username){
-
-    if(!confirm("Удалить пользователя?")){
-        return;
-    }
-
-    await fetch("/admin/delete",{
-
-        method:"POST",
-
-        headers:{
-            "Content-Type":"application/json"
-        },
-
-        body:JSON.stringify({
-
-            admin_username:currentUser.username,
-
-            target:username
-        })
-    });
-
-    loadAdmin();
-}
-
-/* INIT */
-
-updateAuthUI();
+/* =========================================
+INIT
+========================================= */
 
 renderParts();
+
+loadProfile();
 
 </script>
 
