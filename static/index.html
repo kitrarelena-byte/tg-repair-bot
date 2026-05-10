@@ -105,17 +105,12 @@ border-radius:10px;
 
 <div class="container">
 
-<!-- SALE -->
 <div id="sale" class="card">
-
 <h3>Продажа</h3>
 
 <input id="sale_model" placeholder="Модель">
-
 <input id="sale_purchase" placeholder="Цена покупки">
-
 <input id="sale_repair" placeholder="Цена ремонта">
-
 <input id="sale_sell" placeholder="Цена продажи">
 
 <button onclick="sendSale()">
@@ -123,10 +118,8 @@ border-radius:10px;
 </button>
 
 <div id="sale_profit"></div>
-
 </div>
 
-<!-- REPAIR -->
 <div id="repair" class="card hidden">
 
 <h3>Ремонт</h3>
@@ -143,7 +136,6 @@ border-radius:10px;
 
 </div>
 
-<!-- PARTS -->
 <div id="parts" class="card hidden">
 
 <h3>Запчасти</h3>
@@ -170,26 +162,15 @@ border-radius:10px;
 
 </div>
 
-<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
-<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
 
-<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
 
 <script>
-
-document.addEventListener('gesturestart', function (e) {
-e.preventDefault();
-});
-
-document.addEventListener('dblclick', function (e) {
-e.preventDefault();
-}, { passive: false });
 
 const tg = window.Telegram?.WebApp;
 
@@ -200,6 +181,10 @@ tg.expand();
 
 function safeUserId(){
 return tg?.initDataUnsafe?.user?.id || "0";
+}
+
+function storageKey(){
+return "crm_user_" + safeUserId();
 }
 
 function showTab(tab){
@@ -230,9 +215,7 @@ parts.forEach((p,i)=>{
 
 const li = document.createElement("li");
 
-li.innerHTML = `
-${p.name} - ${p.price}
-`;
+li.innerHTML = `${p.name} - ${p.price}`;
 
 const del = document.createElement("button");
 
@@ -277,8 +260,7 @@ renderParts();
 
 async function searchParts(){
 
-const q =
-document.getElementById("search_query").value;
+const q = document.getElementById("search_query").value;
 
 const r =
 await fetch("/parts/search?q=" + encodeURIComponent(q));
@@ -386,6 +368,7 @@ const r = await fetch("/analytics");
 const d = await r.json();
 
 document.getElementById("analytics").innerHTML = `
+
 <h3>Аналитика</h3>
 
 <p>Продажи: ${d.sales_profit}</p>
@@ -393,12 +376,25 @@ document.getElementById("analytics").innerHTML = `
 <p>Ремонт: ${d.repairs_profit}</p>
 
 <p><b>Итого: ${d.total_profit}</b></p>
+
+<button onclick="clearAnalytics()" class="del">
+Очистить аналитику
+</button>
 `;
+}
+
+async function clearAnalytics(){
+
+await fetch("/clear-reports",{
+method:"POST"
+});
+
+loadAnalytics();
 }
 
 function logout(){
 
-localStorage.removeItem("crm_user");
+localStorage.removeItem(storageKey());
 
 loadProfile();
 }
@@ -430,7 +426,10 @@ alert(data.detail);
 return;
 }
 
-localStorage.setItem("crm_user", JSON.stringify(data));
+localStorage.setItem(
+storageKey(),
+JSON.stringify(data)
+);
 
 loadProfile();
 }
@@ -462,7 +461,10 @@ alert(data.detail);
 return;
 }
 
-localStorage.setItem("crm_user", JSON.stringify(data));
+localStorage.setItem(
+storageKey(),
+JSON.stringify(data)
+);
 
 loadProfile();
 }
@@ -472,7 +474,7 @@ function loadProfile(){
 showTab("profile");
 
 const user =
-JSON.parse(localStorage.getItem("crm_user"));
+JSON.parse(localStorage.getItem(storageKey()));
 
 if(user){
 
@@ -521,7 +523,6 @@ placeholder="Пароль"
 <button onclick="login()">
 Войти
 </button>
-
 `;
 }
 }
@@ -531,7 +532,7 @@ async function loadAdmin(){
 showTab("admin");
 
 const user =
-JSON.parse(localStorage.getItem("crm_user"));
+JSON.parse(localStorage.getItem(storageKey()));
 
 if(!user || user.role !== "admin"){
 
@@ -550,7 +551,6 @@ let html = "<h3>Пользователи</h3>";
 users.forEach(u=>{
 
 html += `
-
 <div class="search-card">
 
 <b>${u.username}</b><br>
@@ -568,7 +568,6 @@ Blocked: ${u.blocked}<br>
 </button>
 
 </div>
-
 `;
 
 });
