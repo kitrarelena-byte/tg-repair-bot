@@ -65,7 +65,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def index():
     return FileResponse("static/index.html")
 
-# ---------- PASSWORD ----------
+# ---------- PASSWORD HASH ----------
 def hash_password(password: str):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -78,13 +78,12 @@ async def register(data: dict):
     password = data.get("password")
 
     if not username or not password:
-        return {"ok": False, "error": "Введите логин и пароль"}
+        return {"ok": False, "error": "Заполните поля"}
 
     if tg_id in USERS:
-        return {"ok": True, "user": USERS[tg_id]}
+        return {"ok": False, "error": "Аккаунт уже существует"}
 
     USERS[tg_id] = {
-        "telegram_id": tg_id,
         "username": username,
         "password": hash_password(password),
         "role": "admin" if len(USERS) == 0 else "user",
@@ -93,10 +92,7 @@ async def register(data: dict):
 
     return {
         "ok": True,
-        "user": {
-            "username": username,
-            "role": USERS[tg_id]["role"]
-        }
+        "user": USERS[tg_id]
     }
 
 # ---------- LOGIN ----------
@@ -105,17 +101,17 @@ async def login(data: dict):
 
     tg_id = str(data.get("telegram_id"))
     username = data.get("username")
-    password = hash_password(data.get("password"))
+    password = data.get("password")
 
     user = USERS.get(tg_id)
 
     if not user:
-        return {"ok": False, "error": "Аккаунт не найден"}
+        return {"ok": False, "error": "Пользователь не найден"}
 
     if user["username"] != username:
         return {"ok": False, "error": "Неверный логин"}
 
-    if user["password"] != password:
+    if user["password"] != hash_password(password):
         return {"ok": False, "error": "Неверный пароль"}
 
     return {
@@ -126,11 +122,16 @@ async def login(data: dict):
         }
     }
 
-# ---------- USER ----------
-@app.get("/user/{tg_id}")
-async def get_user(tg_id: str):
+# ---------- LOGOUT ----------
+@app.post("/logout")
+async def logout(data: dict):
+    return {"ok": True}
 
-    user = USERS.get(tg_id)
+# ---------- USER ----------
+@app.get("/user/{telegram_id}")
+async def get_user(telegram_id: str):
+
+    user = USERS.get(telegram_id)
 
     if not user:
         return {"exists": False}
@@ -140,12 +141,6 @@ async def get_user(tg_id: str):
         "username": user["username"],
         "role": user["role"]
     }
-
-# ---------- CLEAR ----------
-@app.delete("/reports/clear")
-async def clear_reports():
-    REPORTS.clear()
-    return {"ok": True}
 
 # ---------- REPORT ----------
 @app.post("/report")
@@ -194,6 +189,14 @@ async def analytics():
 async def get_reports():
     return REPORTS
 
+# ---------- CLEAR ANALYTICS ----------
+@app.post("/analytics/clear")
+async def clear_analytics():
+
+    REPORTS.clear()
+
+    return {"ok": True}
+
 # ---------- ADMIN ----------
 @app.get("/admin")
 async def admin():
@@ -230,15 +233,17 @@ async def search_parts(q: str):
         items = []
 
         for el in soup.find_all("div"):
+
             text = el.get_text(" ", strip=True)
 
-            if "BYN" in text and len(text) < 200:
+            if "BYN" in text and len(text) < 150:
+
                 items.append({
-                    "name": text[:100],
+                    "name": text[:80],
                     "price": text.split()[-1]
                 })
 
-            if len(items) >= 10:
+            if len(items) >= 5:
                 break
 
         if items:
@@ -246,9 +251,11 @@ async def search_parts(q: str):
             return items
 
     except Exception as e:
-        logger.exception(e)
+        logger.warning("requests failed")
 
+    # ---------- PLAYWRIGHT ----------
     if PLAYWRIGHT_AVAILABLE:
+
         try:
             async with async_playwright() as p:
 
@@ -267,7 +274,7 @@ async def search_parts(q: str):
                     timeout=60000
                 )
 
-                await page.wait_for_timeout(5000)
+                await page.wait_for_timeout(4000)
 
                 elements = await page.query_selector_all("div")
 
@@ -281,10 +288,12 @@ async def search_parts(q: str):
 
                         lines = text.split("\n")
 
-                        items.append({
-                            "name": lines[0],
-                            "price": lines[-1]
-                        })
+                        if len(lines) >= 2:
+
+                            items.append({
+                                "name": lines[0],
+                                "price": lines[-1]
+                            })
 
                     if len(items) >= 10:
                         break
@@ -298,6 +307,7 @@ async def search_parts(q: str):
         except Exception as e:
             logger.exception(e)
 
+    # ---------- FALLBACK ----------
     return [
         {
             "name": f"{q} (iparts не дал данные)",
