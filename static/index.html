@@ -25,7 +25,6 @@ margin:0;
 font-family:Arial;
 background:#0b1220;
 color:white;
-zoom:1;
 }
 
 .tabbar{
@@ -106,22 +105,78 @@ border-radius:10px;
 
 <div class="container">
 
+<!-- SALE -->
 <div id="sale" class="card">
+
 <h3>Продажа</h3>
+
+<input id="sale_model" placeholder="Модель">
+
+<input id="sale_purchase" placeholder="Цена покупки">
+
+<input id="sale_repair" placeholder="Цена ремонта">
+
+<input id="sale_sell" placeholder="Цена продажи">
+
+<button onclick="sendSale()">
+Сохранить
+</button>
+
+<div id="sale_profit"></div>
+
 </div>
 
+<!-- REPAIR -->
 <div id="repair" class="card hidden">
+
 <h3>Ремонт</h3>
+
+<input id="repair_model" placeholder="Модель">
+
+<select id="parts_select" multiple></select>
+
+<input id="repair_price" placeholder="Цена работы">
+
+<button onclick="sendRepair()">
+Сохранить
+</button>
+
 </div>
 
+<!-- PARTS -->
 <div id="parts" class="card hidden">
+
 <h3>Запчасти</h3>
+
+<input id="part_name" placeholder="Название">
+
+<input id="part_price" placeholder="Цена">
+
+<button onclick="addPart()">
+Добавить
+</button>
+
+<hr>
+
+<input id="search_query" placeholder="Поиск iparts">
+
+<button onclick="searchParts()">
+Найти
+</button>
+
+<div id="search_results"></div>
+
+<ul id="parts_list"></ul>
+
 </div>
 
+<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
+<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
 
+<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
@@ -155,6 +210,190 @@ document.getElementById(id).classList.add("hidden");
 });
 
 document.getElementById(tab).classList.remove("hidden");
+}
+
+let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+
+function saveParts(){
+localStorage.setItem("parts", JSON.stringify(parts));
+}
+
+function renderParts(){
+
+const list = document.getElementById("parts_list");
+const select = document.getElementById("parts_select");
+
+list.innerHTML = "";
+select.innerHTML = "";
+
+parts.forEach((p,i)=>{
+
+const li = document.createElement("li");
+
+li.innerHTML = `
+${p.name} - ${p.price}
+`;
+
+const del = document.createElement("button");
+
+del.innerText = "Удалить";
+del.className = "del";
+
+del.onclick = ()=>{
+
+parts.splice(i,1);
+
+saveParts();
+
+renderParts();
+};
+
+li.appendChild(del);
+
+list.appendChild(li);
+
+const opt = document.createElement("option");
+
+opt.value = JSON.stringify(p);
+
+opt.text = p.name;
+
+select.appendChild(opt);
+
+});
+}
+
+function addPart(){
+
+parts.push({
+name: document.getElementById("part_name").value,
+price: document.getElementById("part_price").value
+});
+
+saveParts();
+
+renderParts();
+}
+
+async function searchParts(){
+
+const q =
+document.getElementById("search_query").value;
+
+const r =
+await fetch("/parts/search?q=" + encodeURIComponent(q));
+
+const data = await r.json();
+
+const container =
+document.getElementById("search_results");
+
+container.innerHTML = "";
+
+data.forEach(p=>{
+
+const div = document.createElement("div");
+
+div.className = "search-card";
+
+div.innerHTML = `
+<b>${p.name}</b><br>
+${p.price}
+`;
+
+const btn = document.createElement("button");
+
+btn.innerText = "Добавить";
+
+btn.onclick = ()=>{
+
+parts.push({
+name:p.name,
+price:p.price
+});
+
+saveParts();
+
+renderParts();
+};
+
+div.appendChild(btn);
+
+container.appendChild(div);
+
+});
+}
+
+async function sendSale(){
+
+const res = await fetch("/report",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+type:"sale",
+model:document.getElementById("sale_model").value,
+purchase_price:Number(document.getElementById("sale_purchase").value),
+repair_cost:Number(document.getElementById("sale_repair").value),
+sell_price:Number(document.getElementById("sale_sell").value)
+})
+});
+
+const r = await res.json();
+
+document.getElementById("sale_profit").innerText =
+"Profit: " + r.profit;
+}
+
+async function sendRepair(){
+
+const selected =
+[...document.getElementById("parts_select").selectedOptions]
+.map(o=>JSON.parse(o.value));
+
+let partsSum = 0;
+
+selected.forEach(p=>{
+partsSum += Number(p.price);
+});
+
+await fetch("/report",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+telegram_id:safeUserId(),
+type:"repair",
+model:document.getElementById("repair_model").value,
+purchase_price:partsSum,
+repair_cost:Number(document.getElementById("repair_price").value),
+sell_price:0
+})
+});
+
+alert("Сохранено");
+}
+
+async function loadAnalytics(){
+
+showTab("analytics");
+
+const r = await fetch("/analytics");
+
+const d = await r.json();
+
+document.getElementById("analytics").innerHTML = `
+<h3>Аналитика</h3>
+
+<p>Продажи: ${d.sales_profit}</p>
+
+<p>Ремонт: ${d.repairs_profit}</p>
+
+<p><b>Итого: ${d.total_profit}</b></p>
+`;
 }
 
 function logout(){
@@ -303,6 +542,7 @@ return;
 }
 
 const r = await fetch("/users");
+
 const users = await r.json();
 
 let html = "<h3>Пользователи</h3>";
@@ -361,6 +601,8 @@ body:JSON.stringify({username})
 
 loadAdmin();
 }
+
+renderParts();
 
 loadProfile();
 
