@@ -1,3 +1,5 @@
+<!-- static/index.html -->
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -105,12 +107,17 @@ border-radius:10px;
 
 <div class="container">
 
+<!-- SALE -->
 <div id="sale" class="card">
+
 <h3>Продажа</h3>
 
 <input id="sale_model" placeholder="Модель">
+
 <input id="sale_purchase" placeholder="Цена покупки">
+
 <input id="sale_repair" placeholder="Цена ремонта">
+
 <input id="sale_sell" placeholder="Цена продажи">
 
 <button onclick="sendSale()">
@@ -118,8 +125,10 @@ border-radius:10px;
 </button>
 
 <div id="sale_profit"></div>
+
 </div>
 
+<!-- REPAIR -->
 <div id="repair" class="card hidden">
 
 <h3>Ремонт</h3>
@@ -136,6 +145,7 @@ border-radius:10px;
 
 </div>
 
+<!-- PARTS -->
 <div id="parts" class="card hidden">
 
 <h3>Запчасти</h3>
@@ -162,10 +172,13 @@ border-radius:10px;
 
 </div>
 
+<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
+<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
 
+<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
@@ -187,17 +200,39 @@ function storageKey(){
 return "crm_user_" + safeUserId();
 }
 
+function getCurrentUser(){
+return JSON.parse(localStorage.getItem(storageKey()));
+}
+
 function showTab(tab){
 
-["sale","repair","parts","analytics","profile","admin"]
-.forEach(id=>{
+const user = getCurrentUser();
+
+if(!user && tab !== "profile"){
+loadProfile();
+return;
+}
+
+[
+"sale",
+"repair",
+"parts",
+"analytics",
+"profile",
+"admin"
+].forEach(id=>{
 document.getElementById(id).classList.add("hidden");
 });
 
 document.getElementById(tab).classList.remove("hidden");
 }
 
-let parts = JSON.parse(localStorage.getItem("parts") || "[]");
+/* =========================================
+PARTS
+========================================= */
+
+let parts =
+JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts(){
 localStorage.setItem("parts", JSON.stringify(parts));
@@ -206,7 +241,9 @@ localStorage.setItem("parts", JSON.stringify(parts));
 function renderParts(){
 
 const list = document.getElementById("parts_list");
-const select = document.getElementById("parts_select");
+
+const select =
+document.getElementById("parts_select");
 
 list.innerHTML = "";
 select.innerHTML = "";
@@ -220,6 +257,7 @@ li.innerHTML = `${p.name} - ${p.price}`;
 const del = document.createElement("button");
 
 del.innerText = "Удалить";
+
 del.className = "del";
 
 del.onclick = ()=>{
@@ -249,8 +287,8 @@ select.appendChild(opt);
 function addPart(){
 
 parts.push({
-name: document.getElementById("part_name").value,
-price: document.getElementById("part_price").value
+name:document.getElementById("part_name").value,
+price:document.getElementById("part_price").value
 });
 
 saveParts();
@@ -258,9 +296,14 @@ saveParts();
 renderParts();
 }
 
+/* =========================================
+IPARTS
+========================================= */
+
 async function searchParts(){
 
-const q = document.getElementById("search_query").value;
+const q =
+document.getElementById("search_query").value;
 
 const r =
 await fetch("/parts/search?q=" + encodeURIComponent(q));
@@ -306,6 +349,10 @@ container.appendChild(div);
 });
 }
 
+/* =========================================
+SALE
+========================================= */
+
 async function sendSale(){
 
 const res = await fetch("/report",{
@@ -325,9 +372,18 @@ sell_price:Number(document.getElementById("sale_sell").value)
 
 const r = await res.json();
 
+if(r.detail){
+alert(r.detail);
+return;
+}
+
 document.getElementById("sale_profit").innerText =
 "Profit: " + r.profit;
 }
+
+/* =========================================
+REPAIR
+========================================= */
 
 async function sendRepair(){
 
@@ -341,7 +397,7 @@ selected.forEach(p=>{
 partsSum += Number(p.price);
 });
 
-await fetch("/report",{
+const res = await fetch("/report",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -356,8 +412,19 @@ sell_price:0
 })
 });
 
+const r = await res.json();
+
+if(r.detail){
+alert(r.detail);
+return;
+}
+
 alert("Сохранено");
 }
+
+/* =========================================
+ANALYTICS
+========================================= */
 
 async function loadAnalytics(){
 
@@ -366,6 +433,32 @@ showTab("analytics");
 const r = await fetch("/analytics");
 
 const d = await r.json();
+
+const reportsRes = await fetch("/reports");
+
+const reports = await reportsRes.json();
+
+let history = "";
+
+reports.reverse().forEach(r=>{
+
+history += `
+
+<div class="search-card">
+
+<b>${r.type.toUpperCase()}</b><br>
+
+Модель: ${r.model}<br>
+
+Профит: ${r.profit}<br>
+
+Дата: ${r.created_at}
+
+</div>
+
+`;
+
+});
 
 document.getElementById("analytics").innerHTML = `
 
@@ -380,6 +473,13 @@ document.getElementById("analytics").innerHTML = `
 <button onclick="clearAnalytics()" class="del">
 Очистить аналитику
 </button>
+
+<hr>
+
+<h3>История</h3>
+
+${history}
+
 `;
 }
 
@@ -391,6 +491,10 @@ method:"POST"
 
 loadAnalytics();
 }
+
+/* =========================================
+AUTH
+========================================= */
 
 function logout(){
 
@@ -469,16 +573,35 @@ JSON.stringify(data)
 loadProfile();
 }
 
+/* =========================================
+PROFILE
+========================================= */
+
 function loadProfile(){
 
 showTab("profile");
 
-const user =
-JSON.parse(localStorage.getItem(storageKey()));
+const user = getCurrentUser();
 
 if(user){
 
+if(user.blocked){
+
 document.getElementById("profile").innerHTML = `
+
+<h3>Аккаунт заблокирован</h3>
+
+<button onclick="logout()" class="del">
+Выйти
+</button>
+
+`;
+
+return;
+}
+
+document.getElementById("profile").innerHTML = `
+
 <h3>Профиль</h3>
 
 <p>Логин: ${user.username}</p>
@@ -488,6 +611,7 @@ document.getElementById("profile").innerHTML = `
 <button onclick="logout()" class="del">
 Выйти
 </button>
+
 `;
 
 }else{
@@ -523,16 +647,20 @@ placeholder="Пароль"
 <button onclick="login()">
 Войти
 </button>
+
 `;
 }
 }
+
+/* =========================================
+ADMIN
+========================================= */
 
 async function loadAdmin(){
 
 showTab("admin");
 
-const user =
-JSON.parse(localStorage.getItem(storageKey()));
+const user = getCurrentUser();
 
 if(!user || user.role !== "admin"){
 
@@ -551,6 +679,7 @@ let html = "<h3>Пользователи</h3>";
 users.forEach(u=>{
 
 html += `
+
 <div class="search-card">
 
 <b>${u.username}</b><br>
@@ -568,6 +697,7 @@ Blocked: ${u.blocked}<br>
 </button>
 
 </div>
+
 `;
 
 });
@@ -600,6 +730,10 @@ body:JSON.stringify({username})
 
 loadAdmin();
 }
+
+/* =========================================
+INIT
+========================================= */
 
 renderParts();
 

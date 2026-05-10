@@ -1,3 +1,5 @@
+# main.py
+
 import asyncio
 import logging
 import os
@@ -24,15 +26,24 @@ except:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
-# ---------- ADMIN ----------
+# =========================================
+# ADMIN
+# =========================================
+
 ADMIN_USERNAME = "appletech752"
 
-# ---------- STORAGE ----------
+# =========================================
+# STORAGE
+# =========================================
+
 USERS = {}
 REPORTS = []
 CACHE = {}
 
-# ---------- MODELS ----------
+# =========================================
+# MODELS
+# =========================================
+
 class ReportIn(BaseModel):
     telegram_id: str
     type: str
@@ -49,18 +60,27 @@ class AuthIn(BaseModel):
 class UsernameIn(BaseModel):
     username: str
 
-# ---------- BOT ----------
+# =========================================
+# HASH
+# =========================================
+
+def hash_password(password: str):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# =========================================
+# BOT
+# =========================================
+
 async def safe_bot():
     try:
         await run_bot()
     except Exception as e:
         logger.exception(e)
 
-# ---------- HASH ----------
-def hash_password(password: str):
-    return hashlib.sha256(password.encode()).hexdigest()
+# =========================================
+# APP
+# =========================================
 
-# ---------- APP ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(safe_bot())
@@ -68,7 +88,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# ---------- STATIC ----------
+# =========================================
+# STATIC
+# =========================================
+
 if not os.path.exists("static"):
     os.makedirs("static")
 
@@ -78,7 +101,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def index():
     return FileResponse("static/index.html")
 
-# ---------- REGISTER ----------
+# =========================================
+# REGISTER
+# =========================================
+
 @app.post("/register")
 async def register(data: AuthIn):
 
@@ -100,10 +126,14 @@ async def register(data: AuthIn):
 
     return {
         "username": username,
-        "role": role
+        "role": role,
+        "blocked": False
     }
 
-# ---------- LOGIN ----------
+# =========================================
+# LOGIN
+# =========================================
+
 @app.post("/login")
 async def login(data: AuthIn):
 
@@ -114,6 +144,12 @@ async def login(data: AuthIn):
     if not user:
         raise HTTPException(404, "Аккаунт не найден")
 
+    if user["telegram_id"] != data.telegram_id:
+        raise HTTPException(
+            403,
+            "Этот аккаунт принадлежит другому Telegram аккаунту"
+        )
+
     if user["blocked"]:
         raise HTTPException(403, "Аккаунт заблокирован")
 
@@ -122,10 +158,14 @@ async def login(data: AuthIn):
 
     return {
         "username": user["username"],
-        "role": user["role"]
+        "role": user["role"],
+        "blocked": user["blocked"]
     }
 
-# ---------- USERS ----------
+# =========================================
+# USERS
+# =========================================
+
 @app.get("/users")
 async def users():
 
@@ -138,7 +178,10 @@ async def users():
         for u in USERS.values()
     ]
 
-# ---------- BLOCK ----------
+# =========================================
+# BLOCK
+# =========================================
+
 @app.post("/admin/block")
 async def block_user(data: UsernameIn):
 
@@ -147,7 +190,10 @@ async def block_user(data: UsernameIn):
 
     return {"ok": True}
 
-# ---------- UNBLOCK ----------
+# =========================================
+# UNBLOCK
+# =========================================
+
 @app.post("/admin/unblock")
 async def unblock_user(data: UsernameIn):
 
@@ -156,12 +202,29 @@ async def unblock_user(data: UsernameIn):
 
     return {"ok": True}
 
-# ---------- REPORT ----------
+# =========================================
+# REPORT
+# =========================================
+
 @app.post("/report")
 async def create_report(data: ReportIn):
 
+    current_user = None
+
+    for u in USERS.values():
+        if u["telegram_id"] == data.telegram_id:
+            current_user = u
+            break
+
+    if current_user and current_user.get("blocked"):
+        raise HTTPException(403, "Аккаунт заблокирован")
+
     if data.type == "sale":
-        profit = data.sell_price - data.purchase_price - data.repair_cost
+        profit = (
+            data.sell_price
+            - data.purchase_price
+            - data.repair_cost
+        )
 
     elif data.type == "repair":
         profit = data.repair_cost - data.purchase_price
@@ -183,14 +246,27 @@ async def create_report(data: ReportIn):
 
     REPORTS.append(report)
 
-    return {"ok": True, "profit": profit}
+    return {
+        "ok": True,
+        "profit": profit
+    }
 
-# ---------- ANALYTICS ----------
+# =========================================
+# ANALYTICS
+# =========================================
+
 @app.get("/analytics")
 async def analytics():
 
-    sales = [r for r in REPORTS if r["type"] == "sale"]
-    repairs = [r for r in REPORTS if r["type"] == "repair"]
+    sales = [
+        r for r in REPORTS
+        if r["type"] == "sale"
+    ]
+
+    repairs = [
+        r for r in REPORTS
+        if r["type"] == "repair"
+    ]
 
     return {
         "sales_profit": sum(r["profit"] for r in sales),
@@ -198,31 +274,49 @@ async def analytics():
         "total_profit": sum(r["profit"] for r in REPORTS)
     }
 
-# ---------- CLEAR ----------
+# =========================================
+# CLEAR REPORTS
+# =========================================
+
 @app.post("/clear-reports")
 async def clear_reports():
+
     REPORTS.clear()
+
     return {"ok": True}
 
-# ---------- REPORTS ----------
+# =========================================
+# REPORTS
+# =========================================
+
 @app.get("/reports")
 async def get_reports():
     return REPORTS
 
-# ---------- ADMIN ----------
+# =========================================
+# ADMIN
+# =========================================
+
 @app.get("/admin")
 async def admin():
+
     return {
         "users": USERS,
         "reports": REPORTS
     }
 
-# ---------- HEALTH ----------
+# =========================================
+# HEALTH
+# =========================================
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-# ---------- IPARTS ----------
+# =========================================
+# IPARTS SEARCH
+# =========================================
+
 @app.get("/parts/search")
 async def search_parts(q: str):
 
@@ -239,7 +333,11 @@ async def search_parts(q: str):
             "User-Agent": "Mozilla/5.0"
         }
 
-        r = requests.get(url, headers=headers, timeout=10)
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=10
+        )
 
         soup = BeautifulSoup(r.text, "html.parser")
 
@@ -273,7 +371,10 @@ async def search_parts(q: str):
         }
     ]
 
-# ---------- RUN ----------
+# =========================================
+# RUN
+# =========================================
+
 if __name__ == "__main__":
 
     import uvicorn
