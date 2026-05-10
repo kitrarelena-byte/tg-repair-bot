@@ -11,3 +11,4 @@ lxml
 playwright
 passlib[bcrypt]
 bcrypt
+Werkzeug
