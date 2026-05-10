@@ -25,7 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
 # ---------- ADMIN ----------
-ADMIN_USERNAME = "your_username"
+ADMIN_USERNAME = "appletech752"
 
 # ---------- STORAGE ----------
 USERS = {}
