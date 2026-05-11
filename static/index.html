@@ -94,72 +94,58 @@ margin-top:8px;
 border-radius:10px;
 }
 
+/* PROFILE */
+
 .profile-top{
-background:#1f2937;
-padding:18px;
-border-radius:20px;
+background:linear-gradient(
+135deg,
+#1f2937,
+#111827
+);
+padding:24px;
+border-radius:28px;
 display:flex;
-gap:15px;
+gap:20px;
 align-items:center;
-margin-bottom:20px;
+margin-bottom:24px;
+box-shadow:0 0 25px rgba(0,0,0,0.3);
 }
 
 .avatar{
-width:90px;
-height:90px;
-border-radius:20px;
+width:110px;
+height:110px;
+border-radius:26px;
 object-fit:cover;
-background:#111827;
+border:3px solid #22c55e;
+background:#0b1220;
 }
 
 .profile-name{
-font-size:24px;
-font-weight:bold;
-margin-bottom:8px;
+font-size:28px;
+font-weight:700;
+margin-bottom:10px;
 }
 
 .profile-sub{
-opacity:0.8;
-margin-top:4px;
+opacity:0.9;
+margin-top:6px;
+font-size:15px;
 }
 
 .profile-menu{
-background:#1f2937;
-border-radius:18px;
-overflow:hidden;
+display:flex;
+flex-direction:column;
+gap:12px;
 margin-bottom:20px;
 }
 
 .profile-item{
-padding:18px;
-border-bottom:1px solid #374151;
-cursor:pointer;
-font-size:18px;
-}
-
-.profile-item:last-child{
-border-bottom:none;
-}
-
-.user-card{
 background:#1f2937;
-padding:15px;
+padding:16px;
 border-radius:16px;
-margin-bottom:15px;
-}
-
-.user-title{
-font-size:20px;
-font-weight:bold;
-}
-
-.user-sub{
-margin-top:5px;
-opacity:0.8;
-}
-
-.admin-actions button{
-margin-top:10px;
+cursor:pointer;
+font-size:16px;
+font-weight:600;
 }
 
 </style>
@@ -171,12 +157,12 @@ margin-top:10px;
 <div class="tab" onclick="showTab('sale')">📊 Продажа</div>
 <div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
 <div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-<div class="tab" onclick="loadAnalytics()">📈 Аналитика</div>
 <div class="tab" onclick="loadProfile()">👤 Профиль</div>
 </div>
 
 <div class="container">
 
+<!-- SALE -->
 <div id="sale" class="card">
 
 <h3>Продажа</h3>
@@ -197,6 +183,7 @@ margin-top:10px;
 
 </div>
 
+<!-- REPAIR -->
 <div id="repair" class="card hidden">
 
 <h3>Ремонт</h3>
@@ -213,6 +200,7 @@ margin-top:10px;
 
 </div>
 
+<!-- PARTS -->
 <div id="parts" class="card hidden">
 
 <h3>Запчасти</h3>
@@ -239,10 +227,13 @@ margin-top:10px;
 
 </div>
 
+<!-- ANALYTICS -->
 <div id="analytics" class="card hidden"></div>
 
+<!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
 
+<!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
 
 </div>
@@ -254,6 +245,7 @@ const tg = window.Telegram?.WebApp;
 if(tg){
 tg.ready();
 tg.expand();
+disableVerticalSwipes: true;
 }
 
 function safeUserId(){
@@ -285,7 +277,13 @@ return;
 "profile",
 "admin"
 ].forEach(id=>{
-document.getElementById(id).classList.add("hidden");
+
+const el = document.getElementById(id);
+
+if(el){
+el.classList.add("hidden");
+}
+
 });
 
 document.getElementById(tab).classList.remove("hidden");
@@ -564,7 +562,7 @@ function logout(){
 
 localStorage.removeItem(storageKey());
 
-loadProfile();
+location.reload();
 }
 
 async function register(){
@@ -649,56 +647,78 @@ const user = getCurrentUser();
 
 if(user){
 
-const tgUser = tg?.initDataUnsafe?.user;
+const tgUser = tg?.initDataUnsafe?.user || {};
 
 const avatar =
-tgUser?.photo_url ||
-"https://ui-avatars.com/api/?name=" + user.username;
+tgUser.photo_url
+? tgUser.photo_url
+: `https://ui-avatars.com/api/?background=111827&color=22c55e&name=${user.username}`;
 
 const tgUsername =
-tgUser?.username || "нет username";
+tgUser.username
+? "@" + tgUser.username
+: "не указан";
+
+const realName =
+tgUser.first_name
+? tgUser.first_name
+: user.username;
 
 const adminButtons = user.role === "admin"
 ? `
+
 <div class="profile-menu">
 
-<div class="profile-item"
-onclick="loadAnalytics()">
+<div
+class="profile-item"
+onclick="loadAnalytics()"
+>
 📈 Моя аналитика
 </div>
 
-<div class="profile-item"
-onclick="loadAdminUsers()">
+<div
+class="profile-item"
+onclick="loadAdminUsers()"
+>
 👥 Пользователи
 </div>
 
 </div>
+
 `
 : `
+
 <div class="profile-menu">
 
-<div class="profile-item"
-onclick="loadAnalytics()">
+<div
+class="profile-item"
+onclick="loadAnalytics()"
+>
 📈 Моя аналитика
 </div>
 
 </div>
+
 `;
 
 document.getElementById("profile").innerHTML = `
 
 <div class="profile-top">
 
-<img src="${avatar}" class="avatar">
+<img
+src="${avatar}"
+class="avatar"
+referrerpolicy="no-referrer"
+>
 
 <div>
 
 <div class="profile-name">
-${tgUser?.first_name || user.username}
+${realName}
 </div>
 
 <div class="profile-sub">
-Telegram: @${tgUsername}
+Telegram: ${tgUsername}
 </div>
 
 <div class="profile-sub">
@@ -767,69 +787,55 @@ placeholder="Пароль"
 }
 
 /* =========================================
-ADMIN USERS
+ADMIN
 ========================================= */
 
 async function loadAdminUsers(){
 
 showTab("admin");
 
+const user = getCurrentUser();
+
+if(!user || user.role !== "admin"){
+
+document.getElementById("admin").innerHTML =
+"<h3>Нет доступа</h3>";
+
+return;
+}
+
 const r = await fetch("/users");
 
 const users = await r.json();
 
-let html = `
-
-<h2>Пользователи</h2>
-
-`;
+let html = "<h3>Пользователи</h3>";
 
 users.forEach(u=>{
 
 html += `
 
-<div class="user-card">
+<div class="search-card">
 
-<div>
+<b>${u.username}</b><br>
 
-<div class="user-title">
-${u.username}
-</div>
+Role: ${u.role}<br>
 
-<div class="user-sub">
-Роль: ${u.role}
-</div>
+Blocked: ${u.blocked}<br>
 
-<div class="user-sub">
-Статус:
-${u.blocked ? "ЗАБЛОКИРОВАН" : "АКТИВЕН"}
-</div>
-
-</div>
-
-<div class="admin-actions">
-
-<button
-onclick="blockUser('${u.username}')"
-class="del"
->
+<button onclick="blockUser('${u.username}')">
 Блок
 </button>
 
-<button
-onclick="unblockUser('${u.username}')"
->
+<button onclick="unblockUser('${u.username}')">
 Разблок
 </button>
 
 <button
-onclick="deleteUser('${u.username}')"
 class="del"
+onclick="deleteUser('${u.username}')"
 >
 Удалить
 </button>
-
-</div>
 
 </div>
 
@@ -838,6 +844,22 @@ class="del"
 });
 
 document.getElementById("admin").innerHTML = html;
+
+clearInterval(window.adminUpdater);
+
+window.adminUpdater = setInterval(async ()=>{
+
+const currentUser = getCurrentUser();
+
+if(!currentUser || currentUser.role !== "admin")
+return;
+
+if(document.getElementById("admin").classList.contains("hidden"))
+return;
+
+loadAdminUsers();
+
+}, 4000);
 }
 
 async function blockUser(username){
@@ -868,9 +890,6 @@ loadAdminUsers();
 
 async function deleteUser(username){
 
-if(!confirm("Удалить аккаунт?"))
-return;
-
 await fetch("/admin/delete",{
 method:"POST",
 headers:{
@@ -883,12 +902,46 @@ loadAdminUsers();
 }
 
 /* =========================================
+BLOCK CHECK
+========================================= */
+
+async function checkBlocked(){
+
+const user = getCurrentUser();
+
+if(!user)
+return;
+
+try{
+
+const res = await fetch("/users");
+
+const users = await res.json();
+
+const current =
+users.find(u => u.username === user.username);
+
+if(current && current.blocked){
+
+alert("Ваш аккаунт заблокирован");
+
+logout();
+}
+
+}catch(e){}
+}
+
+/* =========================================
 INIT
 ========================================= */
 
 renderParts();
 
+checkBlocked();
+
 loadProfile();
+
+setInterval(checkBlocked, 5000);
 
 </script>
 

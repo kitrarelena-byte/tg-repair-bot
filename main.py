@@ -114,9 +114,16 @@ async def register(data: AuthIn):
     username = data.username.strip().lower()
 
     if username in USERS:
-        raise HTTPException(400, "Пользователь уже существует")
+        raise HTTPException(
+            400,
+            "Пользователь уже существует"
+        )
 
-    role = "admin" if username == ADMIN_USERNAME else "user"
+    role = (
+        "admin"
+        if username == ADMIN_USERNAME
+        else "user"
+    )
 
     USERS[username] = {
         "telegram_id": data.telegram_id,
@@ -145,7 +152,10 @@ async def login(data: AuthIn):
     user = USERS.get(username)
 
     if not user:
-        raise HTTPException(404, "Аккаунт не найден")
+        raise HTTPException(
+            404,
+            "Аккаунт не найден"
+        )
 
     if user["telegram_id"] != data.telegram_id:
         raise HTTPException(
@@ -188,7 +198,7 @@ async def users():
     ]
 
 # =========================================
-# BLOCK
+# BLOCK USER
 # =========================================
 
 @app.post("/admin/block")
@@ -202,7 +212,7 @@ async def block_user(data: UsernameIn):
     return {"ok": True}
 
 # =========================================
-# UNBLOCK
+# UNBLOCK USER
 # =========================================
 
 @app.post("/admin/unblock")
@@ -244,7 +254,14 @@ async def create_report(data: ReportIn):
             current_user = u
             break
 
-    if current_user and current_user.get("blocked"):
+    if not current_user:
+
+        raise HTTPException(
+            401,
+            "Требуется вход в аккаунт"
+        )
+
+    if current_user["blocked"]:
 
         raise HTTPException(
             403,
@@ -402,7 +419,7 @@ async def search_parts(q: str):
     except Exception as e:
         logger.exception(e)
 
-    # fallback
+    # PLAYWRIGHT FALLBACK
 
     if PLAYWRIGHT_AVAILABLE:
 
