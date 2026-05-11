@@ -63,8 +63,6 @@ margin-top:8px;
 border-radius:8px;
 border:none;
 box-sizing:border-box;
-background:#1f2937;
-color:white;
 }
 
 button{
@@ -94,58 +92,86 @@ margin-top:8px;
 border-radius:10px;
 }
 
-/* PROFILE */
+/* =========================================
+PROFILE
+========================================= */
 
 .profile-top{
 background:linear-gradient(
 135deg,
-#1f2937,
+#1a2234,
 #111827
 );
-padding:24px;
-border-radius:28px;
+padding:16px;
+border-radius:22px;
 display:flex;
-gap:20px;
+gap:14px;
 align-items:center;
-margin-bottom:24px;
-box-shadow:0 0 25px rgba(0,0,0,0.3);
+margin-bottom:18px;
+box-shadow:0 0 18px rgba(0,0,0,0.25);
+overflow:hidden;
 }
 
 .avatar{
-width:110px;
-height:110px;
-border-radius:26px;
+width:78px;
+height:78px;
+border-radius:20px;
 object-fit:cover;
-border:3px solid #22c55e;
+border:2px solid #22c55e;
 background:#0b1220;
+flex-shrink:0;
+}
+
+.profile-info{
+flex:1;
+min-width:0;
+overflow:hidden;
 }
 
 .profile-name{
-font-size:28px;
+font-size:20px;
 font-weight:700;
-margin-bottom:10px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 
 .profile-sub{
-opacity:0.9;
-margin-top:6px;
-font-size:15px;
+opacity:0.85;
+margin-top:4px;
+font-size:13px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
 }
 
 .profile-menu{
 display:flex;
 flex-direction:column;
-gap:12px;
-margin-bottom:20px;
+gap:10px;
+margin-top:16px;
 }
 
 .profile-item{
 background:#1f2937;
-padding:16px;
-border-radius:16px;
+padding:14px;
+border-radius:14px;
 cursor:pointer;
-font-size:16px;
-font-weight:600;
+font-weight:bold;
+}
+
+.avatar-upload{
+margin-top:14px;
+font-size:13px;
+opacity:0.9;
+}
+
+.avatar-upload input{
+padding:8px;
+background:#1f2937;
+color:white;
+border:none;
+border-radius:10px;
 }
 
 </style>
@@ -154,10 +180,23 @@ font-weight:600;
 <body>
 
 <div class="tabbar">
-<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
-<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
-<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-<div class="tab" onclick="loadProfile()">👤 Профиль</div>
+
+<div class="tab" onclick="showTab('sale')">
+📊 Продажа
+</div>
+
+<div class="tab" onclick="showTab('repair')">
+🛠 Ремонт
+</div>
+
+<div class="tab" onclick="showTab('parts')">
+🔩 Запчасти
+</div>
+
+<div class="tab" onclick="loadProfile()">
+👤 Профиль
+</div>
+
 </div>
 
 <div class="container">
@@ -245,20 +284,88 @@ const tg = window.Telegram?.WebApp;
 if(tg){
 tg.ready();
 tg.expand();
-disableVerticalSwipes: true;
+disableVerticalSwipes();
 }
 
+/* =========================================
+SAFE USER
+========================================= */
+
 function safeUserId(){
-return String(tg?.initDataUnsafe?.user?.id || "0");
+return tg?.initDataUnsafe?.user?.id || "0";
 }
+
+/* =========================================
+STORAGE
+========================================= */
 
 function storageKey(){
 return "crm_user_" + safeUserId();
 }
 
-function getCurrentUser(){
-return JSON.parse(localStorage.getItem(storageKey()));
+function avatarKey(){
+return "crm_avatar_" + safeUserId();
 }
+
+function getCurrentUser(){
+return JSON.parse(
+localStorage.getItem(storageKey())
+);
+}
+
+function getCustomAvatar(){
+return localStorage.getItem(avatarKey());
+}
+
+function saveCustomAvatar(base64){
+localStorage.setItem(
+avatarKey(),
+base64
+);
+}
+
+/* =========================================
+AVATAR
+========================================= */
+
+function uploadAvatar(event){
+
+const file = event.target.files[0];
+
+if(!file)
+return;
+
+const reader = new FileReader();
+
+reader.onload = function(e){
+
+saveCustomAvatar(e.target.result);
+
+loadProfile();
+};
+
+reader.readAsDataURL(file);
+}
+
+/* =========================================
+ZOOM BLOCK
+========================================= */
+
+document.addEventListener(
+'touchmove',
+function(event){
+
+if(event.scale !== 1){
+event.preventDefault();
+}
+
+},
+{ passive:false }
+);
+
+/* =========================================
+TABS
+========================================= */
 
 function showTab(tab){
 
@@ -278,7 +385,8 @@ return;
 "admin"
 ].forEach(id=>{
 
-const el = document.getElementById(id);
+const el =
+document.getElementById(id);
 
 if(el){
 el.classList.add("hidden");
@@ -286,7 +394,12 @@ el.classList.add("hidden");
 
 });
 
-document.getElementById(tab).classList.remove("hidden");
+const active =
+document.getElementById(tab);
+
+if(active){
+active.classList.remove("hidden");
+}
 }
 
 /* =========================================
@@ -297,12 +410,16 @@ let parts =
 JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts(){
-localStorage.setItem("parts", JSON.stringify(parts));
+localStorage.setItem(
+"parts",
+JSON.stringify(parts)
+);
 }
 
 function renderParts(){
 
-const list = document.getElementById("parts_list");
+const list =
+document.getElementById("parts_list");
 
 const select =
 document.getElementById("parts_select");
@@ -312,11 +429,14 @@ select.innerHTML = "";
 
 parts.forEach((p,i)=>{
 
-const li = document.createElement("li");
+const li =
+document.createElement("li");
 
-li.innerHTML = `${p.name} - ${p.price}`;
+li.innerHTML =
+`${p.name} - ${p.price}`;
 
-const del = document.createElement("button");
+const del =
+document.createElement("button");
 
 del.innerText = "Удалить";
 
@@ -335,7 +455,8 @@ li.appendChild(del);
 
 list.appendChild(li);
 
-const opt = document.createElement("option");
+const opt =
+document.createElement("option");
 
 opt.value = JSON.stringify(p);
 
@@ -379,7 +500,8 @@ container.innerHTML = "";
 
 data.forEach(p=>{
 
-const div = document.createElement("div");
+const div =
+document.createElement("div");
 
 div.className = "search-card";
 
@@ -388,7 +510,8 @@ div.innerHTML = `
 ${p.price}
 `;
 
-const btn = document.createElement("button");
+const btn =
+document.createElement("button");
 
 btn.innerText = "Добавить";
 
@@ -492,13 +615,17 @@ async function loadAnalytics(){
 
 showTab("analytics");
 
-const r = await fetch("/analytics");
+const r =
+await fetch("/analytics");
 
-const d = await r.json();
+const d =
+await r.json();
 
-const reportsRes = await fetch("/reports");
+const reportsRes =
+await fetch("/reports");
 
-const reports = await reportsRes.json();
+const reports =
+await reportsRes.json();
 
 let history = "";
 
@@ -532,7 +659,10 @@ document.getElementById("analytics").innerHTML = `
 
 <p><b>Итого: ${d.total_profit}</b></p>
 
-<button onclick="clearAnalytics()" class="del">
+<button
+onclick="clearAnalytics()"
+class="del"
+>
 Очистить аналитику
 </button>
 
@@ -562,7 +692,7 @@ function logout(){
 
 localStorage.removeItem(storageKey());
 
-location.reload();
+loadProfile();
 }
 
 async function register(){
@@ -573,7 +703,8 @@ document.getElementById("reg_username").value;
 const password =
 document.getElementById("reg_password").value;
 
-const res = await fetch("/register",{
+const res =
+await fetch("/register",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -585,7 +716,8 @@ password
 })
 });
 
-const data = await res.json();
+const data =
+await res.json();
 
 if(data.detail){
 alert(data.detail);
@@ -608,7 +740,8 @@ document.getElementById("login_username").value;
 const password =
 document.getElementById("login_password").value;
 
-const res = await fetch("/login",{
+const res =
+await fetch("/login",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -620,7 +753,8 @@ password
 })
 });
 
-const data = await res.json();
+const data =
+await res.json();
 
 if(data.detail){
 alert(data.detail);
@@ -643,16 +777,25 @@ function loadProfile(){
 
 showTab("profile");
 
-const user = getCurrentUser();
+const user =
+getCurrentUser();
 
 if(user){
 
-const tgUser = tg?.initDataUnsafe?.user || {};
+const tgUser =
+tg?.initDataUnsafe?.user || {};
+
+const customAvatar =
+getCustomAvatar();
 
 const avatar =
+customAvatar
+? customAvatar
+: (
 tgUser.photo_url
 ? tgUser.photo_url
-: `https://ui-avatars.com/api/?background=111827&color=22c55e&name=${user.username}`;
+: `https://ui-avatars.com/api/?background=111827&color=22c55e&name=${user.username}`
+);
 
 const tgUsername =
 tgUser.username
@@ -664,7 +807,8 @@ tgUser.first_name
 ? tgUser.first_name
 : user.username;
 
-const adminButtons = user.role === "admin"
+const adminButtons =
+user.role === "admin"
 ? `
 
 <div class="profile-menu">
@@ -711,7 +855,7 @@ class="avatar"
 referrerpolicy="no-referrer"
 >
 
-<div>
+<div class="profile-info">
 
 <div class="profile-name">
 ${realName}
@@ -735,6 +879,18 @@ Mini App: ${user.username}
 
 ${adminButtons}
 
+<div class="avatar-upload">
+
+Загрузить аватар:
+
+<input
+type="file"
+accept="image/*"
+onchange="uploadAvatar(event)"
+>
+
+</div>
+
 <button
 onclick="logout()"
 class="del"
@@ -748,11 +904,12 @@ class="del"
 
 document.getElementById("profile").innerHTML = `
 
-<div class="card">
-
 <h3>Регистрация</h3>
 
-<input id="reg_username" placeholder="Логин">
+<input
+id="reg_username"
+placeholder="Логин"
+>
 
 <input
 id="reg_password"
@@ -768,7 +925,10 @@ placeholder="Пароль"
 
 <h3>Вход</h3>
 
-<input id="login_username" placeholder="Логин">
+<input
+id="login_username"
+placeholder="Логин"
+>
 
 <input
 id="login_password"
@@ -780,21 +940,20 @@ placeholder="Пароль"
 Войти
 </button>
 
-</div>
-
 `;
 }
 }
 
 /* =========================================
-ADMIN
+ADMIN USERS
 ========================================= */
 
 async function loadAdminUsers(){
 
 showTab("admin");
 
-const user = getCurrentUser();
+const user =
+getCurrentUser();
 
 if(!user || user.role !== "admin"){
 
@@ -804,11 +963,14 @@ document.getElementById("admin").innerHTML =
 return;
 }
 
-const r = await fetch("/users");
+const r =
+await fetch("/users");
 
-const users = await r.json();
+const users =
+await r.json();
 
-let html = "<h3>Пользователи</h3>";
+let html =
+"<h3>Пользователи</h3>";
 
 users.forEach(u=>{
 
@@ -818,21 +980,27 @@ html += `
 
 <b>${u.username}</b><br>
 
-Role: ${u.role}<br>
+Роль: ${u.role}<br>
 
-Blocked: ${u.blocked}<br>
+Статус:
+${u.blocked ? "Заблокирован" : "Активен"}
 
-<button onclick="blockUser('${u.username}')">
+<button
+onclick="blockUser('${u.username}')"
+class="del"
+>
 Блок
 </button>
 
-<button onclick="unblockUser('${u.username}')">
+<button
+onclick="unblockUser('${u.username}')"
+>
 Разблок
 </button>
 
 <button
-class="del"
 onclick="deleteUser('${u.username}')"
+class="del"
 >
 Удалить
 </button>
@@ -843,23 +1011,8 @@ onclick="deleteUser('${u.username}')"
 
 });
 
-document.getElementById("admin").innerHTML = html;
-
-clearInterval(window.adminUpdater);
-
-window.adminUpdater = setInterval(async ()=>{
-
-const currentUser = getCurrentUser();
-
-if(!currentUser || currentUser.role !== "admin")
-return;
-
-if(document.getElementById("admin").classList.contains("hidden"))
-return;
-
-loadAdminUsers();
-
-}, 4000);
+document.getElementById("admin").innerHTML =
+html;
 }
 
 async function blockUser(username){
@@ -902,46 +1055,12 @@ loadAdminUsers();
 }
 
 /* =========================================
-BLOCK CHECK
-========================================= */
-
-async function checkBlocked(){
-
-const user = getCurrentUser();
-
-if(!user)
-return;
-
-try{
-
-const res = await fetch("/users");
-
-const users = await res.json();
-
-const current =
-users.find(u => u.username === user.username);
-
-if(current && current.blocked){
-
-alert("Ваш аккаунт заблокирован");
-
-logout();
-}
-
-}catch(e){}
-}
-
-/* =========================================
 INIT
 ========================================= */
 
 renderParts();
 
-checkBlocked();
-
 loadProfile();
-
-setInterval(checkBlocked, 5000);
 
 </script>
 

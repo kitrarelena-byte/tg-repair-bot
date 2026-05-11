@@ -60,9 +60,6 @@ class AuthIn(BaseModel):
 class UsernameIn(BaseModel):
     username: str
 
-class DeleteUserIn(BaseModel):
-    username: str
-
 # =========================================
 # HASH
 # =========================================
@@ -115,15 +112,11 @@ async def register(data: AuthIn):
 
     if username in USERS:
         raise HTTPException(
-            400,
-            "Пользователь уже существует"
+            status_code=400,
+            detail="Пользователь уже существует"
         )
 
-    role = (
-        "admin"
-        if username == ADMIN_USERNAME
-        else "user"
-    )
+    role = "admin" if username == ADMIN_USERNAME else "user"
 
     USERS[username] = {
         "telegram_id": data.telegram_id,
@@ -153,26 +146,26 @@ async def login(data: AuthIn):
 
     if not user:
         raise HTTPException(
-            404,
-            "Аккаунт не найден"
+            status_code=404,
+            detail="Аккаунт не найден"
         )
 
     if user["telegram_id"] != data.telegram_id:
         raise HTTPException(
-            403,
-            "Этот аккаунт принадлежит другому Telegram аккаунту"
+            status_code=403,
+            detail="Этот аккаунт принадлежит другому Telegram аккаунту"
         )
 
     if user["blocked"]:
         raise HTTPException(
-            403,
-            "Вы заблокированы"
+            status_code=403,
+            detail="Вы заблокированы"
         )
 
     if user["password"] != hash_password(data.password):
         raise HTTPException(
-            401,
-            "Неверный пароль"
+            status_code=401,
+            detail="Неверный пароль"
         )
 
     return {
@@ -192,7 +185,8 @@ async def users():
         {
             "username": u["username"],
             "role": u["role"],
-            "blocked": u["blocked"]
+            "blocked": u["blocked"],
+            "created_at": u["created_at"]
         }
         for u in USERS.values()
     ]
@@ -204,7 +198,7 @@ async def users():
 @app.post("/admin/block")
 async def block_user(data: UsernameIn):
 
-    username = data.username.strip().lower()
+    username = data.username.lower()
 
     if username in USERS:
         USERS[username]["blocked"] = True
@@ -218,7 +212,7 @@ async def block_user(data: UsernameIn):
 @app.post("/admin/unblock")
 async def unblock_user(data: UsernameIn):
 
-    username = data.username.strip().lower()
+    username = data.username.lower()
 
     if username in USERS:
         USERS[username]["blocked"] = False
@@ -230,9 +224,9 @@ async def unblock_user(data: UsernameIn):
 # =========================================
 
 @app.post("/admin/delete")
-async def delete_user(data: DeleteUserIn):
+async def delete_user(data: UsernameIn):
 
-    username = data.username.strip().lower()
+    username = data.username.lower()
 
     if username in USERS:
         del USERS[username]
@@ -249,23 +243,14 @@ async def create_report(data: ReportIn):
     current_user = None
 
     for u in USERS.values():
-
         if u["telegram_id"] == data.telegram_id:
             current_user = u
             break
 
-    if not current_user:
-
+    if current_user and current_user.get("blocked"):
         raise HTTPException(
-            401,
-            "Требуется вход в аккаунт"
-        )
-
-    if current_user["blocked"]:
-
-        raise HTTPException(
-            403,
-            "Вы заблокированы"
+            status_code=403,
+            detail="Вы заблокированы"
         )
 
     if data.type == "sale":
@@ -284,7 +269,6 @@ async def create_report(data: ReportIn):
         )
 
     else:
-
         profit = 0
 
     report = {
@@ -394,13 +378,19 @@ async def search_parts(q: str):
             timeout=10
         )
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
 
         items = []
 
         for el in soup.find_all("div"):
 
-            text = el.get_text(" ", strip=True)
+            text = el.get_text(
+                " ",
+                strip=True
+            )
 
             if "BYN" in text and len(text) < 200:
 
@@ -428,7 +418,11 @@ async def search_parts(q: str):
             async with async_playwright() as p:
 
                 browser = await p.chromium.launch(
-                    headless=True
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage"
+                    ]
                 )
 
                 page = await browser.new_page()
