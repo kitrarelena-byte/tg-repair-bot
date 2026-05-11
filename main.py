@@ -60,6 +60,9 @@ class AuthIn(BaseModel):
 class UsernameIn(BaseModel):
     username: str
 
+class DeleteUserIn(BaseModel):
+    username: str
+
 # =========================================
 # HASH
 # =========================================
@@ -151,10 +154,16 @@ async def login(data: AuthIn):
         )
 
     if user["blocked"]:
-        raise HTTPException(403, "Аккаунт заблокирован")
+        raise HTTPException(
+            403,
+            "Вы заблокированы"
+        )
 
     if user["password"] != hash_password(data.password):
-        raise HTTPException(401, "Неверный пароль")
+        raise HTTPException(
+            401,
+            "Неверный пароль"
+        )
 
     return {
         "username": user["username"],
@@ -185,8 +194,10 @@ async def users():
 @app.post("/admin/block")
 async def block_user(data: UsernameIn):
 
-    if data.username in USERS:
-        USERS[data.username]["blocked"] = True
+    username = data.username.strip().lower()
+
+    if username in USERS:
+        USERS[username]["blocked"] = True
 
     return {"ok": True}
 
@@ -197,8 +208,24 @@ async def block_user(data: UsernameIn):
 @app.post("/admin/unblock")
 async def unblock_user(data: UsernameIn):
 
-    if data.username in USERS:
-        USERS[data.username]["blocked"] = False
+    username = data.username.strip().lower()
+
+    if username in USERS:
+        USERS[username]["blocked"] = False
+
+    return {"ok": True}
+
+# =========================================
+# DELETE USER
+# =========================================
+
+@app.post("/admin/delete")
+async def delete_user(data: DeleteUserIn):
+
+    username = data.username.strip().lower()
+
+    if username in USERS:
+        del USERS[username]
 
     return {"ok": True}
 
@@ -212,14 +239,20 @@ async def create_report(data: ReportIn):
     current_user = None
 
     for u in USERS.values():
+
         if u["telegram_id"] == data.telegram_id:
             current_user = u
             break
 
     if current_user and current_user.get("blocked"):
-        raise HTTPException(403, "Аккаунт заблокирован")
+
+        raise HTTPException(
+            403,
+            "Вы заблокированы"
+        )
 
     if data.type == "sale":
+
         profit = (
             data.sell_price
             - data.purchase_price
@@ -227,9 +260,14 @@ async def create_report(data: ReportIn):
         )
 
     elif data.type == "repair":
-        profit = data.repair_cost - data.purchase_price
+
+        profit = (
+            data.repair_cost
+            - data.purchase_price
+        )
 
     else:
+
         profit = 0
 
     report = {
@@ -363,6 +401,58 @@ async def search_parts(q: str):
 
     except Exception as e:
         logger.exception(e)
+
+    # fallback
+
+    if PLAYWRIGHT_AVAILABLE:
+
+        try:
+
+            async with async_playwright() as p:
+
+                browser = await p.chromium.launch(
+                    headless=True
+                )
+
+                page = await browser.new_page()
+
+                await page.goto(
+                    f"https://iparts.by/search/?q={q}",
+                    timeout=60000
+                )
+
+                await page.wait_for_timeout(3000)
+
+                elements = await page.query_selector_all("div")
+
+                items = []
+
+                for el in elements:
+
+                    text = await el.inner_text()
+
+                    if "BYN" in text and len(text) < 200:
+
+                        lines = text.split("\n")
+
+                        if len(lines) >= 2:
+
+                            items.append({
+                                "name": lines[0],
+                                "price": lines[-1]
+                            })
+
+                    if len(items) >= 10:
+                        break
+
+                await browser.close()
+
+                if items:
+                    CACHE[q] = items
+                    return items
+
+        except Exception as e:
+            logger.exception(e)
 
     return [
         {
