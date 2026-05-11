@@ -4,8 +4,6 @@ import asyncio
 import logging
 import os
 import hashlib
-import random
-
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -19,7 +17,11 @@ from bot import run_bot
 import requests
 from bs4 import BeautifulSoup
 
-from playwright.async_api import async_playwright
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except:
+    PLAYWRIGHT_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
@@ -37,17 +39,6 @@ ADMIN_USERNAME = "appletech752"
 USERS = {}
 REPORTS = []
 CACHE = {}
-
-# =========================================
-# PLAYWRIGHT
-# =========================================
-
-BROWSER = None
-
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Mozilla/5.0 (X11; Linux x86_64)"
-]
 
 # =========================================
 # MODELS
@@ -87,175 +78,12 @@ async def safe_bot():
         logger.exception(e)
 
 # =========================================
-# PLAYWRIGHT
-# =========================================
-
-async def get_browser():
-
-    global BROWSER
-
-    if BROWSER:
-        return BROWSER
-
-    playwright = await async_playwright().start()
-
-    BROWSER = await playwright.chromium.launch(
-        headless=True,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-dev-shm-usage"
-        ]
-    )
-
-    return BROWSER
-
-async def stealth(page):
-
-    await page.add_init_script("""
-Object.defineProperty(navigator, 'webdriver', {
-    get: () => undefined
-});
-
-window.chrome = {
-    runtime: {}
-};
-
-Object.defineProperty(navigator, 'plugins', {
-    get: () => [1,2,3]
-});
-
-Object.defineProperty(navigator, 'languages', {
-    get: () => ['ru-RU', 'ru']
-});
-    """)
-
-# =========================================
-# IPARTS PARSER
-# =========================================
-
-async def search_iparts(query: str):
-
-    browser = await get_browser()
-
-    context = await browser.new_context(
-        user_agent=random.choice(USER_AGENTS),
-        locale="ru-RU",
-        viewport={"width": 1366, "height": 768}
-    )
-
-    page = await context.new_page()
-
-    await stealth(page)
-
-    results = []
-
-    try:
-
-        await page.goto(
-            f"https://iparts.by/search/?q={query}",
-            wait_until="domcontentloaded",
-            timeout=90000
-        )
-
-        await page.wait_for_timeout(
-            random.randint(2500, 5000)
-        )
-
-        cards = await page.query_selector_all("article")
-
-        if not cards:
-            cards = await page.query_selector_all("div")
-
-        for card in cards:
-
-            try:
-
-                text = await card.inner_text()
-
-                if not text:
-                    continue
-
-                if "BYN" not in text:
-                    continue
-
-                if len(text) > 500:
-                    continue
-
-                lines = [
-                    x.strip()
-                    for x in text.split("\n")
-                    if x.strip()
-                ]
-
-                if len(lines) < 2:
-                    continue
-
-                name = lines[0][:120]
-
-                price = "Не указана"
-
-                for line in lines:
-                    if "BYN" in line:
-                        price = line
-                        break
-
-                image = ""
-
-                img_el = await card.query_selector("img")
-
-                if img_el:
-
-                    src = await img_el.get_attribute("src")
-
-                    if src:
-                        image = src
-
-                link = ""
-
-                link_el = await card.query_selector("a")
-
-                if link_el:
-
-                    href = await link_el.get_attribute("href")
-
-                    if href:
-
-                        if href.startswith("/"):
-                            link = "https://iparts.by" + href
-                        else:
-                            link = href
-
-                results.append({
-                    "name": name,
-                    "price": price,
-                    "image": image,
-                    "link": link
-                })
-
-            except:
-                pass
-
-            if len(results) >= 15:
-                break
-
-    except Exception as e:
-        logger.exception(e)
-
-    finally:
-        await context.close()
-
-    return results
-
-# =========================================
 # APP
 # =========================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
     asyncio.create_task(safe_bot())
-
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -283,7 +111,6 @@ async def register(data: AuthIn):
     username = data.username.strip().lower()
 
     if username in USERS:
-
         raise HTTPException(
             status_code=400,
             detail="Пользователь уже существует"
@@ -318,28 +145,24 @@ async def login(data: AuthIn):
     user = USERS.get(username)
 
     if not user:
-
         raise HTTPException(
             status_code=404,
             detail="Аккаунт не найден"
         )
 
     if user["telegram_id"] != data.telegram_id:
-
         raise HTTPException(
             status_code=403,
             detail="Этот аккаунт принадлежит другому Telegram аккаунту"
         )
 
     if user["blocked"]:
-
         raise HTTPException(
             status_code=403,
             detail="Вы заблокированы"
         )
 
     if user["password"] != hash_password(data.password):
-
         raise HTTPException(
             status_code=401,
             detail="Неверный пароль"
@@ -369,7 +192,7 @@ async def users():
     ]
 
 # =========================================
-# BLOCK
+# BLOCK USER
 # =========================================
 
 @app.post("/admin/block")
@@ -383,7 +206,7 @@ async def block_user(data: UsernameIn):
     return {"ok": True}
 
 # =========================================
-# UNBLOCK
+# UNBLOCK USER
 # =========================================
 
 @app.post("/admin/unblock")
@@ -397,7 +220,7 @@ async def unblock_user(data: UsernameIn):
     return {"ok": True}
 
 # =========================================
-# DELETE
+# DELETE USER
 # =========================================
 
 @app.post("/admin/delete")
@@ -420,13 +243,11 @@ async def create_report(data: ReportIn):
     current_user = None
 
     for u in USERS.values():
-
         if u["telegram_id"] == data.telegram_id:
             current_user = u
             break
 
     if current_user and current_user.get("blocked"):
-
         raise HTTPException(
             status_code=403,
             detail="Вы заблокированы"
@@ -448,7 +269,6 @@ async def create_report(data: ReportIn):
         )
 
     else:
-
         profit = 0
 
     report = {
@@ -534,13 +354,45 @@ async def search_parts(q: str):
 
     try:
 
-        data = await search_iparts(q)
+        url = f"https://iparts.by/search/?q={q}"
 
-        if data:
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-            CACHE[q] = data
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=10
+        )
 
-            return data
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        items = []
+
+        for el in soup.find_all("div"):
+
+            text = el.get_text(
+                " ",
+                strip=True
+            )
+
+            if "BYN" in text and len(text) < 200:
+
+                items.append({
+                    "name": text[:120],
+                    "price": text.split()[-1]
+                })
+
+            if len(items) >= 10:
+                break
+
+        if items:
+            CACHE[q] = items
+            return items
 
     except Exception as e:
         logger.exception(e)
@@ -548,9 +400,7 @@ async def search_parts(q: str):
     return [
         {
             "name": f"{q} (нет данных)",
-            "price": "—",
-            "image": "",
-            "link": ""
+            "price": "—"
         }
     ]
 
