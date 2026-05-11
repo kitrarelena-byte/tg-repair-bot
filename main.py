@@ -1,12 +1,13 @@
+# main.py
+
 import asyncio
 import logging
 import os
 import hashlib
-import base64
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -25,7 +26,15 @@ except:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
+# =========================================
+# ADMIN
+# =========================================
+
 ADMIN_USERNAME = "appletech752"
+
+# =========================================
+# STORAGE
+# =========================================
 
 USERS = {}
 REPORTS = []
@@ -47,7 +56,6 @@ class AuthIn(BaseModel):
     telegram_id: str
     username: str
     password: str
-    telegram_username: str = ""
 
 class UsernameIn(BaseModel):
     username: str
@@ -87,9 +95,6 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
-if not os.path.exists("static/avatars"):
-    os.makedirs("static/avatars")
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -106,27 +111,26 @@ async def register(data: AuthIn):
     username = data.username.strip().lower()
 
     if username in USERS:
-        raise HTTPException(400, "Пользователь уже существует")
+        raise HTTPException(
+            status_code=400,
+            detail="Пользователь уже существует"
+        )
 
     role = "admin" if username == ADMIN_USERNAME else "user"
 
     USERS[username] = {
         "telegram_id": data.telegram_id,
-        "telegram_username": data.telegram_username,
         "username": username,
         "password": hash_password(data.password),
         "role": role,
         "blocked": False,
-        "avatar": "",
         "created_at": datetime.utcnow().isoformat()
     }
 
     return {
         "username": username,
-        "telegram_username": data.telegram_username,
         "role": role,
-        "blocked": False,
-        "avatar": ""
+        "blocked": False
     }
 
 # =========================================
@@ -141,99 +145,34 @@ async def login(data: AuthIn):
     user = USERS.get(username)
 
     if not user:
-        raise HTTPException(404, "Аккаунт не найден")
+        raise HTTPException(
+            status_code=404,
+            detail="Аккаунт не найден"
+        )
 
     if user["telegram_id"] != data.telegram_id:
         raise HTTPException(
-            403,
-            "Этот аккаунт привязан к другому Telegram аккаунту"
+            status_code=403,
+            detail="Этот аккаунт принадлежит другому Telegram аккаунту"
         )
 
     if user["blocked"]:
-        raise HTTPException(403, "Вы заблокированы")
+        raise HTTPException(
+            status_code=403,
+            detail="Вы заблокированы"
+        )
 
     if user["password"] != hash_password(data.password):
-        raise HTTPException(401, "Неверный пароль")
+        raise HTTPException(
+            status_code=401,
+            detail="Неверный пароль"
+        )
 
     return {
         "username": user["username"],
-        "telegram_username": user.get("telegram_username", ""),
         "role": user["role"],
-        "blocked": user["blocked"],
-        "avatar": user.get("avatar", "")
+        "blocked": user["blocked"]
     }
-
-# =========================================
-# PROFILE
-# =========================================
-
-@app.get("/profile/{telegram_id}")
-async def get_profile(telegram_id: str):
-
-    for user in USERS.values():
-        if user["telegram_id"] == telegram_id:
-
-            return {
-                "username": user["username"],
-                "telegram_username": user.get("telegram_username", ""),
-                "role": user["role"],
-                "blocked": user["blocked"],
-                "avatar": user.get("avatar", "")
-            }
-
-    raise HTTPException(404, "Пользователь не найден")
-
-# =========================================
-# AVATAR
-# =========================================
-
-@app.post("/upload-avatar")
-async def upload_avatar(
-    telegram_id: str = Form(...),
-    avatar: UploadFile = File(...)
-):
-
-    try:
-
-        allowed = [
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/jpg"
-        ]
-
-        if avatar.content_type not in allowed:
-            raise HTTPException(400, "Неподдерживаемый формат")
-
-        ext = avatar.filename.split(".")[-1]
-
-        filename = f"{telegram_id}.{ext}"
-
-        filepath = f"static/avatars/{filename}"
-
-        content = await avatar.read()
-
-        if len(content) > 10 * 1024 * 1024:
-            raise HTTPException(400, "Файл слишком большой")
-
-        with open(filepath, "wb") as f:
-            f.write(content)
-
-        for user in USERS.values():
-
-            if user["telegram_id"] == telegram_id:
-                user["avatar"] = f"/static/avatars/{filename}"
-
-                return {
-                    "ok": True,
-                    "avatar": user["avatar"]
-                }
-
-        raise HTTPException(404, "Пользователь не найден")
-
-    except Exception as e:
-        logger.exception(e)
-        raise HTTPException(500, "Ошибка загрузки")
 
 # =========================================
 # USERS
@@ -245,10 +184,9 @@ async def users():
     return [
         {
             "username": u["username"],
-            "telegram_username": u.get("telegram_username", ""),
             "role": u["role"],
             "blocked": u["blocked"],
-            "avatar": u.get("avatar", "")
+            "created_at": u["created_at"]
         }
         for u in USERS.values()
     ]
@@ -262,10 +200,8 @@ async def block_user(data: UsernameIn):
 
     username = data.username.lower()
 
-    if username not in USERS:
-        raise HTTPException(404, "Пользователь не найден")
-
-    USERS[username]["blocked"] = True
+    if username in USERS:
+        USERS[username]["blocked"] = True
 
     return {"ok": True}
 
@@ -278,10 +214,8 @@ async def unblock_user(data: UsernameIn):
 
     username = data.username.lower()
 
-    if username not in USERS:
-        raise HTTPException(404, "Пользователь не найден")
-
-    USERS[username]["blocked"] = False
+    if username in USERS:
+        USERS[username]["blocked"] = False
 
     return {"ok": True}
 
@@ -294,10 +228,8 @@ async def delete_user(data: UsernameIn):
 
     username = data.username.lower()
 
-    if username not in USERS:
-        raise HTTPException(404, "Пользователь не найден")
-
-    del USERS[username]
+    if username in USERS:
+        del USERS[username]
 
     return {"ok": True}
 
@@ -315,13 +247,14 @@ async def create_report(data: ReportIn):
             current_user = u
             break
 
-    if not current_user:
-        raise HTTPException(401, "Авторизуйтесь")
-
-    if current_user["blocked"]:
-        raise HTTPException(403, "Вы заблокированы")
+    if current_user and current_user.get("blocked"):
+        raise HTTPException(
+            status_code=403,
+            detail="Вы заблокированы"
+        )
 
     if data.type == "sale":
+
         profit = (
             data.sell_price
             - data.purchase_price
@@ -329,7 +262,11 @@ async def create_report(data: ReportIn):
         )
 
     elif data.type == "repair":
-        profit = data.repair_cost - data.purchase_price
+
+        profit = (
+            data.repair_cost
+            - data.purchase_price
+        )
 
     else:
         profit = 0
@@ -337,7 +274,6 @@ async def create_report(data: ReportIn):
     report = {
         "id": len(REPORTS) + 1,
         "telegram_id": data.telegram_id,
-        "username": current_user["username"],
         "type": data.type,
         "model": data.model,
         "purchase_price": data.purchase_price,
@@ -430,13 +366,19 @@ async def search_parts(q: str):
             timeout=10
         )
 
-        soup = BeautifulSoup(r.text, "html.parser")
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
 
         items = []
 
         for el in soup.find_all("div"):
 
-            text = el.get_text(" ", strip=True)
+            text = el.get_text(
+                " ",
+                strip=True
+            )
 
             if "BYN" in text and len(text) < 200:
 
