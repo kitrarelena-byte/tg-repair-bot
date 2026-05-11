@@ -17,16 +17,14 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 <style>
 
-html, body{
-touch-action: manipulation;
-overscroll-behavior: none;
-}
-
-body{
+html,body{
 margin:0;
-font-family:Arial;
+padding:0;
 background:#0b1220;
+font-family:Arial;
 color:white;
+touch-action:manipulation;
+overscroll-behavior:none;
 }
 
 .tabbar{
@@ -40,9 +38,10 @@ gap:10px;
 .tab{
 padding:10px 14px;
 background:#1f2937;
-border-radius:10px;
+border-radius:12px;
 cursor:pointer;
 white-space:nowrap;
+font-weight:bold;
 }
 
 .container{
@@ -52,73 +51,67 @@ padding:15px;
 .card{
 background:#111827;
 padding:15px;
-border-radius:14px;
+border-radius:16px;
 margin-bottom:15px;
-}
-
-input, select{
-width:100%;
-padding:10px;
-margin-top:8px;
-border-radius:8px;
-border:none;
-box-sizing:border-box;
-}
-
-button{
-margin-top:10px;
-padding:12px;
-width:100%;
-border-radius:10px;
-border:none;
-background:#22c55e;
-font-weight:bold;
-cursor:pointer;
-color:white;
-}
-
-.del{
-background:#ef4444;
 }
 
 .hidden{
 display:none;
 }
 
-.search-card{
+input,select{
+width:100%;
+padding:12px;
+margin-top:10px;
+border:none;
+border-radius:12px;
 background:#1f2937;
-padding:10px;
-margin-top:8px;
-border-radius:10px;
+color:white;
+box-sizing:border-box;
 }
 
-/* =========================================
-PROFILE
-========================================= */
+button{
+width:100%;
+padding:12px;
+margin-top:10px;
+border:none;
+border-radius:12px;
+background:#22c55e;
+color:white;
+font-weight:bold;
+cursor:pointer;
+}
+
+.del{
+background:#ef4444;
+}
+
+.search-card{
+background:#1f2937;
+padding:12px;
+border-radius:14px;
+margin-top:10px;
+}
 
 .profile-top{
-background:linear-gradient(
-135deg,
-#1a2234,
-#111827
-);
-padding:16px;
-border-radius:22px;
+background:#111827;
+border:1px solid #1f2937;
+padding:14px;
+border-radius:18px;
 display:flex;
-gap:14px;
 align-items:center;
-margin-bottom:18px;
-box-shadow:0 0 18px rgba(0,0,0,0.25);
+gap:12px;
+margin-bottom:16px;
 overflow:hidden;
 }
 
 .avatar{
-width:78px;
-height:78px;
-border-radius:20px;
+width:72px;
+height:72px;
+border-radius:18px;
 object-fit:cover;
+background:#1f2937;
 border:2px solid #22c55e;
-background:#0b1220;
 flex-shrink:0;
 }
 
@@ -129,20 +122,22 @@ overflow:hidden;
 }
 
 .profile-name{
-font-size:20px;
+font-size:18px;
 font-weight:700;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
+color:white;
 }
 
 .profile-sub{
-opacity:0.85;
-margin-top:4px;
 font-size:13px;
+opacity:.8;
+margin-top:4px;
 white-space:nowrap;
 overflow:hidden;
 text-overflow:ellipsis;
+color:#d1d5db;
 }
 
 .profile-menu{
@@ -158,20 +153,36 @@ padding:14px;
 border-radius:14px;
 cursor:pointer;
 font-weight:bold;
+transition:.2s;
+}
+
+.profile-item:active{
+transform:scale(.98);
 }
 
 .avatar-upload{
-margin-top:14px;
+margin-top:16px;
+padding:12px;
+background:#111827;
+border-radius:14px;
+border:1px solid #1f2937;
+}
+
+.avatar-upload label{
+display:block;
+margin-bottom:8px;
 font-size:13px;
-opacity:0.9;
+opacity:.85;
 }
 
 .avatar-upload input{
-padding:8px;
 background:#1f2937;
 color:white;
 border:none;
+padding:10px;
 border-radius:10px;
+width:100%;
+box-sizing:border-box;
 }
 
 </style>
@@ -180,23 +191,10 @@ border-radius:10px;
 <body>
 
 <div class="tabbar">
-
-<div class="tab" onclick="showTab('sale')">
-📊 Продажа
-</div>
-
-<div class="tab" onclick="showTab('repair')">
-🛠 Ремонт
-</div>
-
-<div class="tab" onclick="showTab('parts')">
-🔩 Запчасти
-</div>
-
-<div class="tab" onclick="loadProfile()">
-👤 Профиль
-</div>
-
+<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
+<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
+<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
+<div class="tab" onclick="loadProfile()">👤 Профиль</div>
 </div>
 
 <div class="container">
@@ -266,11 +264,11 @@ border-radius:10px;
 
 </div>
 
-<!-- ANALYTICS -->
-<div id="analytics" class="card hidden"></div>
-
 <!-- PROFILE -->
 <div id="profile" class="card hidden"></div>
+
+<!-- ANALYTICS -->
+<div id="analytics" class="card hidden"></div>
 
 <!-- ADMIN -->
 <div id="admin" class="card hidden"></div>
@@ -287,17 +285,13 @@ tg.expand();
 disableVerticalSwipes();
 }
 
-/* =========================================
-SAFE USER
-========================================= */
-
 function safeUserId(){
 return tg?.initDataUnsafe?.user?.id || "0";
 }
 
-/* =========================================
-STORAGE
-========================================= */
+function tgUser(){
+return tg?.initDataUnsafe?.user || {};
+}
 
 function storageKey(){
 return "crm_user_" + safeUserId();
@@ -308,60 +302,22 @@ return "crm_avatar_" + safeUserId();
 }
 
 function getCurrentUser(){
-return JSON.parse(
-localStorage.getItem(storageKey())
-);
+return JSON.parse(localStorage.getItem(storageKey()));
 }
 
-function getCustomAvatar(){
-return localStorage.getItem(avatarKey());
+function disableVerticalSwipes(){
+
+document.body.addEventListener(
+"touchmove",
+function(e){
+if(e.scale !== 1){
+e.preventDefault();
 }
-
-function saveCustomAvatar(base64){
-localStorage.setItem(
-avatarKey(),
-base64
-);
-}
-
-/* =========================================
-AVATAR
-========================================= */
-
-function uploadAvatar(event){
-
-const file = event.target.files[0];
-
-if(!file)
-return;
-
-const reader = new FileReader();
-
-reader.onload = function(e){
-
-saveCustomAvatar(e.target.result);
-
-loadProfile();
-};
-
-reader.readAsDataURL(file);
-}
-
-/* =========================================
-ZOOM BLOCK
-========================================= */
-
-document.addEventListener(
-'touchmove',
-function(event){
-
-if(event.scale !== 1){
-event.preventDefault();
-}
-
 },
 { passive:false }
 );
+
+}
 
 /* =========================================
 TABS
@@ -380,26 +336,14 @@ return;
 "sale",
 "repair",
 "parts",
-"analytics",
 "profile",
+"analytics",
 "admin"
 ].forEach(id=>{
-
-const el =
-document.getElementById(id);
-
-if(el){
-el.classList.add("hidden");
-}
-
+document.getElementById(id).classList.add("hidden");
 });
 
-const active =
-document.getElementById(tab);
-
-if(active){
-active.classList.remove("hidden");
-}
+document.getElementById(tab).classList.remove("hidden");
 }
 
 /* =========================================
@@ -429,18 +373,20 @@ select.innerHTML = "";
 
 parts.forEach((p,i)=>{
 
-const li =
-document.createElement("li");
+const li = document.createElement("li");
 
-li.innerHTML =
-`${p.name} - ${p.price}`;
+li.className = "search-card";
 
-const del =
-document.createElement("button");
+li.innerHTML = `
+${p.name}<br>
+${p.price}
+`;
 
-del.innerText = "Удалить";
+const del = document.createElement("button");
 
 del.className = "del";
+
+del.innerText = "Удалить";
 
 del.onclick = ()=>{
 
@@ -449,14 +395,14 @@ parts.splice(i,1);
 saveParts();
 
 renderParts();
+
 };
 
 li.appendChild(del);
 
 list.appendChild(li);
 
-const opt =
-document.createElement("option");
+const opt = document.createElement("option");
 
 opt.value = JSON.stringify(p);
 
@@ -500,8 +446,7 @@ container.innerHTML = "";
 
 data.forEach(p=>{
 
-const div =
-document.createElement("div");
+const div = document.createElement("div");
 
 div.className = "search-card";
 
@@ -510,8 +455,7 @@ div.innerHTML = `
 ${p.price}
 `;
 
-const btn =
-document.createElement("button");
+const btn = document.createElement("button");
 
 btn.innerText = "Добавить";
 
@@ -525,6 +469,7 @@ price:p.price
 saveParts();
 
 renderParts();
+
 };
 
 div.appendChild(btn);
@@ -608,83 +553,6 @@ alert("Сохранено");
 }
 
 /* =========================================
-ANALYTICS
-========================================= */
-
-async function loadAnalytics(){
-
-showTab("analytics");
-
-const r =
-await fetch("/analytics");
-
-const d =
-await r.json();
-
-const reportsRes =
-await fetch("/reports");
-
-const reports =
-await reportsRes.json();
-
-let history = "";
-
-reports.reverse().forEach(r=>{
-
-history += `
-
-<div class="search-card">
-
-<b>${r.type.toUpperCase()}</b><br>
-
-Модель: ${r.model}<br>
-
-Профит: ${r.profit}<br>
-
-Дата: ${r.created_at}
-
-</div>
-
-`;
-
-});
-
-document.getElementById("analytics").innerHTML = `
-
-<h3>Аналитика</h3>
-
-<p>Продажи: ${d.sales_profit}</p>
-
-<p>Ремонт: ${d.repairs_profit}</p>
-
-<p><b>Итого: ${d.total_profit}</b></p>
-
-<button
-onclick="clearAnalytics()"
-class="del"
->
-Очистить аналитику
-</button>
-
-<hr>
-
-<h3>История</h3>
-
-${history}
-
-`;
-}
-
-async function clearAnalytics(){
-
-await fetch("/clear-reports",{
-method:"POST"
-});
-
-loadAnalytics();
-}
-
-/* =========================================
 AUTH
 ========================================= */
 
@@ -703,8 +571,7 @@ document.getElementById("reg_username").value;
 const password =
 document.getElementById("reg_password").value;
 
-const res =
-await fetch("/register",{
+const res = await fetch("/register",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -716,8 +583,7 @@ password
 })
 });
 
-const data =
-await res.json();
+const data = await res.json();
 
 if(data.detail){
 alert(data.detail);
@@ -740,8 +606,7 @@ document.getElementById("login_username").value;
 const password =
 document.getElementById("login_password").value;
 
-const res =
-await fetch("/login",{
+const res = await fetch("/login",{
 method:"POST",
 headers:{
 "Content-Type":"application/json"
@@ -753,8 +618,7 @@ password
 })
 });
 
-const data =
-await res.json();
+const data = await res.json();
 
 if(data.detail){
 alert(data.detail);
@@ -770,6 +634,205 @@ loadProfile();
 }
 
 /* =========================================
+UPLOAD AVATAR
+========================================= */
+
+async function uploadAvatar(event){
+
+const file = event.target.files[0];
+
+if(!file){
+alert("Файл не выбран");
+return;
+}
+
+const reader = new FileReader();
+
+reader.onload = function(e){
+
+try{
+
+const base64 = e.target.result;
+
+localStorage.setItem(
+avatarKey(),
+base64
+);
+
+alert("Аватарка обновлена");
+
+loadProfile();
+
+}catch(err){
+
+alert("Ошибка загрузки");
+
+}
+
+};
+
+reader.readAsDataURL(file);
+}
+
+/* =========================================
+ANALYTICS
+========================================= */
+
+async function loadAnalytics(){
+
+showTab("analytics");
+
+const r = await fetch("/analytics");
+
+const d = await r.json();
+
+const reportsRes = await fetch("/reports");
+
+const reports = await reportsRes.json();
+
+let history = "";
+
+reports.reverse().forEach(r=>{
+
+history += `
+<div class="search-card">
+<b>${r.type.toUpperCase()}</b><br>
+Модель: ${r.model}<br>
+Профит: ${r.profit}<br>
+Дата: ${r.created_at}
+</div>
+`;
+
+});
+
+document.getElementById("analytics").innerHTML = `
+<h3>Аналитика</h3>
+
+<p>Продажи: ${d.sales_profit}</p>
+
+<p>Ремонт: ${d.repairs_profit}</p>
+
+<p><b>Итого: ${d.total_profit}</b></p>
+
+<button onclick="clearAnalytics()" class="del">
+Очистить аналитику
+</button>
+
+<hr>
+
+<h3>История</h3>
+
+${history}
+`;
+}
+
+async function clearAnalytics(){
+
+await fetch("/clear-reports",{
+method:"POST"
+});
+
+loadAnalytics();
+}
+
+/* =========================================
+ADMIN
+========================================= */
+
+async function loadAdmin(){
+
+showTab("admin");
+
+const user = getCurrentUser();
+
+if(!user || user.role !== "admin"){
+
+document.getElementById("admin").innerHTML =
+"<h3>Нет доступа</h3>";
+
+return;
+}
+
+const r = await fetch("/users");
+
+const users = await r.json();
+
+let html = "<h3>Пользователи</h3>";
+
+users.forEach(u=>{
+
+html += `
+<div class="search-card">
+
+<b>${u.username}</b><br>
+
+Role: ${u.role}<br>
+
+Blocked: ${u.blocked}<br><br>
+
+<button onclick="blockUser('${u.username}')">
+Блок
+</button>
+
+<button onclick="unblockUser('${u.username}')">
+Разблок
+</button>
+
+<button
+class="del"
+onclick="deleteUser('${u.username}')"
+>
+Удалить
+</button>
+
+</div>
+`;
+
+});
+
+document.getElementById("admin").innerHTML = html;
+}
+
+async function blockUser(username){
+
+await fetch("/admin/block",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({username})
+});
+
+loadAdmin();
+}
+
+async function unblockUser(username){
+
+await fetch("/admin/unblock",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({username})
+});
+
+loadAdmin();
+}
+
+async function deleteUser(username){
+
+await fetch("/admin/delete",{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({username})
+});
+
+loadAdmin();
+}
+
+/* =========================================
 PROFILE
 ========================================= */
 
@@ -777,73 +840,39 @@ function loadProfile(){
 
 showTab("profile");
 
-const user =
-getCurrentUser();
+const user = getCurrentUser();
 
-if(user){
-
-const tgUser =
-tg?.initDataUnsafe?.user || {};
+const tgData = tgUser();
 
 const customAvatar =
-getCustomAvatar();
+localStorage.getItem(avatarKey());
 
 const avatar =
 customAvatar
 ? customAvatar
 : (
-tgUser.photo_url
-? tgUser.photo_url
-: `https://ui-avatars.com/api/?background=111827&color=22c55e&name=${user.username}`
+tgData.photo_url
+? tgData.photo_url
+: "https://i.imgur.com/8Km9tLL.png"
 );
 
-const tgUsername =
-tgUser.username
-? "@" + tgUser.username
-: "не указан";
+if(user){
 
-const realName =
-tgUser.first_name
-? tgUser.first_name
-: user.username;
+if(user.blocked){
 
-const adminButtons =
-user.role === "admin"
-? `
+document.getElementById("profile").innerHTML = `
+<h3>Вы заблокированы</h3>
 
-<div class="profile-menu">
-
-<div
-class="profile-item"
-onclick="loadAnalytics()"
+<button
+onclick="logout()"
+class="del"
 >
-📈 Моя аналитика
-</div>
-
-<div
-class="profile-item"
-onclick="loadAdminUsers()"
->
-👥 Пользователи
-</div>
-
-</div>
-
-`
-: `
-
-<div class="profile-menu">
-
-<div
-class="profile-item"
-onclick="loadAnalytics()"
->
-📈 Моя аналитика
-</div>
-
-</div>
-
+Выйти
+</button>
 `;
+
+return;
+}
 
 document.getElementById("profile").innerHTML = `
 
@@ -852,36 +881,31 @@ document.getElementById("profile").innerHTML = `
 <img
 src="${avatar}"
 class="avatar"
-referrerpolicy="no-referrer"
 >
 
 <div class="profile-info">
 
 <div class="profile-name">
-${realName}
+${tgData.first_name || "User"}
 </div>
 
 <div class="profile-sub">
-Telegram: ${tgUsername}
+Telegram: @${tgData.username || "unknown"}
 </div>
 
 <div class="profile-sub">
-Mini App: ${user.username}
-</div>
-
-<div class="profile-sub">
-Роль: ${user.role}
+CRM: ${user.username}
 </div>
 
 </div>
 
 </div>
-
-${adminButtons}
 
 <div class="avatar-upload">
 
-Загрузить аватар:
+<label>
+Сменить аватарку
+</label>
 
 <input
 type="file"
@@ -891,12 +915,36 @@ onchange="uploadAvatar(event)"
 
 </div>
 
-<button
-onclick="logout()"
-class="del"
+<div class="profile-menu">
+
+<div
+class="profile-item"
+onclick="loadAnalytics()"
 >
-Выйти
-</button>
+📈 Моя аналитика
+</div>
+
+${
+user.role === "admin"
+? `
+<div
+class="profile-item"
+onclick="loadAdmin()"
+>
+👥 Пользователи
+</div>
+`
+: ""
+}
+
+<div
+class="profile-item"
+onclick="logout()"
+>
+🚪 Выйти
+</div>
+
+</div>
 
 `;
 
@@ -906,10 +954,7 @@ document.getElementById("profile").innerHTML = `
 
 <h3>Регистрация</h3>
 
-<input
-id="reg_username"
-placeholder="Логин"
->
+<input id="reg_username" placeholder="Логин">
 
 <input
 id="reg_password"
@@ -925,10 +970,7 @@ placeholder="Пароль"
 
 <h3>Вход</h3>
 
-<input
-id="login_username"
-placeholder="Логин"
->
+<input id="login_username" placeholder="Логин">
 
 <input
 id="login_password"
@@ -942,116 +984,6 @@ placeholder="Пароль"
 
 `;
 }
-}
-
-/* =========================================
-ADMIN USERS
-========================================= */
-
-async function loadAdminUsers(){
-
-showTab("admin");
-
-const user =
-getCurrentUser();
-
-if(!user || user.role !== "admin"){
-
-document.getElementById("admin").innerHTML =
-"<h3>Нет доступа</h3>";
-
-return;
-}
-
-const r =
-await fetch("/users");
-
-const users =
-await r.json();
-
-let html =
-"<h3>Пользователи</h3>";
-
-users.forEach(u=>{
-
-html += `
-
-<div class="search-card">
-
-<b>${u.username}</b><br>
-
-Роль: ${u.role}<br>
-
-Статус:
-${u.blocked ? "Заблокирован" : "Активен"}
-
-<button
-onclick="blockUser('${u.username}')"
-class="del"
->
-Блок
-</button>
-
-<button
-onclick="unblockUser('${u.username}')"
->
-Разблок
-</button>
-
-<button
-onclick="deleteUser('${u.username}')"
-class="del"
->
-Удалить
-</button>
-
-</div>
-
-`;
-
-});
-
-document.getElementById("admin").innerHTML =
-html;
-}
-
-async function blockUser(username){
-
-await fetch("/admin/block",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({username})
-});
-
-loadAdminUsers();
-}
-
-async function unblockUser(username){
-
-await fetch("/admin/unblock",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({username})
-});
-
-loadAdminUsers();
-}
-
-async function deleteUser(username){
-
-await fetch("/admin/delete",{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({username})
-});
-
-loadAdminUsers();
 }
 
 /* =========================================
