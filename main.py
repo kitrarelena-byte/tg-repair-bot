@@ -333,18 +333,6 @@ async def get_reports():
     return REPORTS
 
 # =========================================
-# ADMIN
-# =========================================
-
-@app.get("/admin")
-async def admin():
-
-    return {
-        "users": USERS,
-        "reports": REPORTS
-    }
-
-# =========================================
 # HEALTH
 # =========================================
 
@@ -408,62 +396,6 @@ async def search_parts(q: str):
 
     except Exception as e:
         logger.exception(e)
-
-    # PLAYWRIGHT FALLBACK
-
-    if PLAYWRIGHT_AVAILABLE:
-
-        try:
-
-            async with async_playwright() as p:
-
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage"
-                    ]
-                )
-
-                page = await browser.new_page()
-
-                await page.goto(
-                    f"https://iparts.by/search/?q={q}",
-                    timeout=60000
-                )
-
-                await page.wait_for_timeout(3000)
-
-                elements = await page.query_selector_all("div")
-
-                items = []
-
-                for el in elements:
-
-                    text = await el.inner_text()
-
-                    if "BYN" in text and len(text) < 200:
-
-                        lines = text.split("\n")
-
-                        if len(lines) >= 2:
-
-                            items.append({
-                                "name": lines[0],
-                                "price": lines[-1]
-                            })
-
-                    if len(items) >= 10:
-                        break
-
-                await browser.close()
-
-                if items:
-                    CACHE[q] = items
-                    return items
-
-        except Exception as e:
-            logger.exception(e)
 
     return [
         {
