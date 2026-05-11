@@ -377,9 +377,39 @@ const li = document.createElement("li");
 
 li.className = "search-card";
 
-li.innerHTML = `
-${p.name}<br>
-${p.price}
+div.innerHTML = `
+
+${p.image
+? `
+<img
+src="${p.image}"
+style="
+width:100%;
+max-height:160px;
+object-fit:contain;
+background:white;
+border-radius:12px;
+margin-bottom:10px;
+">
+`
+: ""}
+
+<b>${p.name}</b><br><br>
+
+${p.price}<br><br>
+
+${p.link
+? `
+<a
+href="${p.link}"
+target="_blank"
+style="color:#60a5fa;"
+>
+Открыть товар
+</a>
+`
+: ""}
+
 `;
 
 const del = document.createElement("button");

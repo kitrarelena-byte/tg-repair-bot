@@ -12,3 +12,4 @@ playwright
 passlib[bcrypt]
 bcrypt
 Werkzeug
+aiohttp
