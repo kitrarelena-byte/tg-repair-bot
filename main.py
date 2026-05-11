@@ -6,7 +6,7 @@ import base64
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -48,14 +48,9 @@ class AuthIn(BaseModel):
     username: str
     password: str
     telegram_username: str = ""
-    telegram_photo: str = ""
 
 class UsernameIn(BaseModel):
     username: str
-
-class AvatarIn(BaseModel):
-    username: str
-    avatar: str
 
 # =========================================
 # HASH
@@ -92,6 +87,9 @@ app = FastAPI(lifespan=lifespan)
 if not os.path.exists("static"):
     os.makedirs("static")
 
+if not os.path.exists("static/avatars"):
+    os.makedirs("static/avatars")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -114,23 +112,21 @@ async def register(data: AuthIn):
 
     USERS[username] = {
         "telegram_id": data.telegram_id,
+        "telegram_username": data.telegram_username,
         "username": username,
         "password": hash_password(data.password),
-        "telegram_username": data.telegram_username,
-        "telegram_photo": data.telegram_photo,
-        "avatar": "",
         "role": role,
         "blocked": False,
+        "avatar": "",
         "created_at": datetime.utcnow().isoformat()
     }
 
     return {
         "username": username,
         "telegram_username": data.telegram_username,
-        "telegram_photo": data.telegram_photo,
-        "avatar": "",
         "role": role,
-        "blocked": False
+        "blocked": False,
+        "avatar": ""
     }
 
 # =========================================
@@ -162,42 +158,82 @@ async def login(data: AuthIn):
     return {
         "username": user["username"],
         "telegram_username": user.get("telegram_username", ""),
-        "telegram_photo": user.get("telegram_photo", ""),
-        "avatar": user.get("avatar", ""),
         "role": user["role"],
-        "blocked": user["blocked"]
+        "blocked": user["blocked"],
+        "avatar": user.get("avatar", "")
     }
+
+# =========================================
+# PROFILE
+# =========================================
+
+@app.get("/profile/{telegram_id}")
+async def get_profile(telegram_id: str):
+
+    for user in USERS.values():
+        if user["telegram_id"] == telegram_id:
+
+            return {
+                "username": user["username"],
+                "telegram_username": user.get("telegram_username", ""),
+                "role": user["role"],
+                "blocked": user["blocked"],
+                "avatar": user.get("avatar", "")
+            }
+
+    raise HTTPException(404, "Пользователь не найден")
 
 # =========================================
 # AVATAR
 # =========================================
 
 @app.post("/upload-avatar")
-async def upload_avatar(data: AvatarIn):
-
-    user = USERS.get(data.username)
-
-    if not user:
-        raise HTTPException(404, "Пользователь не найден")
+async def upload_avatar(
+    telegram_id: str = Form(...),
+    avatar: UploadFile = File(...)
+):
 
     try:
-        # проверка base64
-        if "," in data.avatar:
-            header, encoded = data.avatar.split(",", 1)
-        else:
-            encoded = data.avatar
 
-        base64.b64decode(encoded)
+        allowed = [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/jpg"
+        ]
 
-        user["avatar"] = data.avatar
+        if avatar.content_type not in allowed:
+            raise HTTPException(400, "Неподдерживаемый формат")
 
-        return {
-            "ok": True,
-            "avatar": data.avatar
-        }
+        ext = avatar.filename.split(".")[-1]
 
-    except Exception:
-        raise HTTPException(400, "Ошибка загрузки")
+        filename = f"{telegram_id}.{ext}"
+
+        filepath = f"static/avatars/{filename}"
+
+        content = await avatar.read()
+
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(400, "Файл слишком большой")
+
+        with open(filepath, "wb") as f:
+            f.write(content)
+
+        for user in USERS.values():
+
+            if user["telegram_id"] == telegram_id:
+                user["avatar"] = f"/static/avatars/{filename}"
+
+                return {
+                    "ok": True,
+                    "avatar": user["avatar"]
+                }
+
+        raise HTTPException(404, "Пользователь не найден")
+
+    except Exception as e:
+        logger.exception(e)
+        raise HTTPException(500, "Ошибка загрузки")
 
 # =========================================
 # USERS
@@ -211,32 +247,41 @@ async def users():
             "username": u["username"],
             "telegram_username": u.get("telegram_username", ""),
             "role": u["role"],
-            "blocked": u["blocked"]
+            "blocked": u["blocked"],
+            "avatar": u.get("avatar", "")
         }
         for u in USERS.values()
     ]
 
 # =========================================
-# BLOCK
+# BLOCK USER
 # =========================================
 
 @app.post("/admin/block")
 async def block_user(data: UsernameIn):
 
-    if data.username in USERS:
-        USERS[data.username]["blocked"] = True
+    username = data.username.lower()
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    USERS[username]["blocked"] = True
 
     return {"ok": True}
 
 # =========================================
-# UNBLOCK
+# UNBLOCK USER
 # =========================================
 
 @app.post("/admin/unblock")
 async def unblock_user(data: UsernameIn):
 
-    if data.username in USERS:
-        USERS[data.username]["blocked"] = False
+    username = data.username.lower()
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    USERS[username]["blocked"] = False
 
     return {"ok": True}
 
@@ -247,8 +292,12 @@ async def unblock_user(data: UsernameIn):
 @app.post("/admin/delete")
 async def delete_user(data: UsernameIn):
 
-    if data.username in USERS:
-        del USERS[data.username]
+    username = data.username.lower()
+
+    if username not in USERS:
+        raise HTTPException(404, "Пользователь не найден")
+
+    del USERS[username]
 
     return {"ok": True}
 
@@ -266,7 +315,10 @@ async def create_report(data: ReportIn):
             current_user = u
             break
 
-    if current_user and current_user.get("blocked"):
+    if not current_user:
+        raise HTTPException(401, "Авторизуйтесь")
+
+    if current_user["blocked"]:
         raise HTTPException(403, "Вы заблокированы")
 
     if data.type == "sale":
@@ -285,6 +337,7 @@ async def create_report(data: ReportIn):
     report = {
         "id": len(REPORTS) + 1,
         "telegram_id": data.telegram_id,
+        "username": current_user["username"],
         "type": data.type,
         "model": data.model,
         "purchase_price": data.purchase_price,
@@ -342,18 +395,6 @@ async def clear_reports():
 @app.get("/reports")
 async def get_reports():
     return REPORTS
-
-# =========================================
-# ADMIN
-# =========================================
-
-@app.get("/admin")
-async def admin():
-
-    return {
-        "users": USERS,
-        "reports": REPORTS
-    }
 
 # =========================================
 # HEALTH
