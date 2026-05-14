@@ -629,34 +629,162 @@ async def health():
 @app.get("/parts/search")
 async def search_parts(q: str):
 
-    q = q.strip().lower()
+    q = q.strip()
 
     if not q:
         return []
 
-    if q in CACHE:
-        return CACHE[q]
+    cache_key = q.lower()
+
+    if cache_key in CACHE:
+        return CACHE[cache_key]
 
     try:
 
-        data = await search_iparts(q)
+        session = requests.Session()
 
-        if data:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ru-RU,ru;q=0.9",
+            "Referer": "https://iparts.by/",
+            "Connection": "keep-alive"
+        }
 
-            CACHE[q] = data
+        url = f"https://iparts.by/search/?q={q}"
 
-            return data
+        response = session.get(
+            url,
+            headers=headers,
+            timeout=20
+        )
+
+        html = response.text
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        items = []
+
+        # =====================================
+        # ИЩЕМ ВСЕ ТЕКСТЫ С ЦЕНОЙ
+        # =====================================
+
+        texts = soup.find_all(text=True)
+
+        used = set()
+
+        for t in texts:
+
+            text = str(t).strip()
+
+            if not text:
+                continue
+
+            # ищем цены
+            if (
+                "BYN" in text
+                or "руб." in text
+                or "р." in text
+            ):
+
+                parent = t.parent
+
+                if not parent:
+                    continue
+
+                block_text = parent.get_text(
+                    " ",
+                    strip=True
+                )
+
+                block_text = " ".join(block_text.split())
+
+                if len(block_text) < 15:
+                    continue
+
+                if len(block_text) > 300:
+                    continue
+
+                if block_text in used:
+                    continue
+
+                used.add(block_text)
+
+                # =================================
+                # ПЫТАЕМСЯ ВЫТАЩИТЬ ЦЕНУ
+                # =================================
+
+                price = "—"
+
+                words = block_text.split()
+
+                for w in words:
+
+                    if (
+                        "BYN" in w
+                        or "руб" in w
+                    ):
+                        price = w
+
+                # =================================
+                # НАЗВАНИЕ
+                # =================================
+
+                name = block_text[:180]
+
+                items.append({
+                    "name": name,
+                    "price": price
+                })
+
+            if len(items) >= 15:
+                break
+
+        # =====================================
+        # ОЧИСТКА ДУБЛЕЙ
+        # =====================================
+
+        clean = []
+
+        names = set()
+
+        for item in items:
+
+            key = item["name"][:50]
+
+            if key in names:
+                continue
+
+            names.add(key)
+
+            clean.append(item)
+
+        # =====================================
+        # УСПЕХ
+        # =====================================
+
+        if clean:
+
+            CACHE[cache_key] = clean
+
+            return clean
 
     except Exception as e:
 
         logger.exception(e)
 
+    # =========================================
+    # FALLBACK
+    # =========================================
+
     return [
         {
             "name": f"{q} (ничего не найдено)",
-            "price": "—",
-            "image": "",
-            "link": ""
+            "price": "—"
         }
     ]
 
