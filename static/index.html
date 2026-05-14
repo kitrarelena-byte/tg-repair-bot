@@ -93,6 +93,10 @@ border-radius:14px;
 margin-top:10px;
 }
 
+.search-card img{
+display:block;
+}
+
 .profile-top{
 background:#111827;
 border:1px solid #1f2937;
@@ -185,16 +189,61 @@ width:100%;
 box-sizing:border-box;
 }
 
+.parts-image{
+width:100%;
+max-height:180px;
+object-fit:contain;
+background:white;
+border-radius:12px;
+margin-bottom:10px;
+padding:6px;
+}
+
+.parts-link{
+display:block;
+margin-bottom:10px;
+color:#60a5fa;
+text-decoration:none;
+font-weight:bold;
+}
+
+.parts-price{
+font-size:18px;
+font-weight:bold;
+color:#22c55e;
+margin-bottom:12px;
+}
+
+.parts-title{
+font-weight:bold;
+font-size:15px;
+line-height:1.4;
+margin-bottom:10px;
+}
+
 </style>
 </head>
 
 <body>
 
 <div class="tabbar">
-<div class="tab" onclick="showTab('sale')">📊 Продажа</div>
-<div class="tab" onclick="showTab('repair')">🛠 Ремонт</div>
-<div class="tab" onclick="showTab('parts')">🔩 Запчасти</div>
-<div class="tab" onclick="loadProfile()">👤 Профиль</div>
+
+<div class="tab" onclick="showTab('sale')">
+📊 Продажа
+</div>
+
+<div class="tab" onclick="showTab('repair')">
+🛠 Ремонт
+</div>
+
+<div class="tab" onclick="showTab('parts')">
+🔩 Запчасти
+</div>
+
+<div class="tab" onclick="loadProfile()">
+👤 Профиль
+</div>
+
 </div>
 
 <div class="container">
@@ -354,10 +403,12 @@ let parts =
 JSON.parse(localStorage.getItem("parts") || "[]");
 
 function saveParts(){
+
 localStorage.setItem(
 "parts",
 JSON.stringify(parts)
 );
+
 }
 
 function renderParts(){
@@ -411,6 +462,7 @@ opt.text = p.name;
 select.appendChild(opt);
 
 });
+
 }
 
 function addPart(){
@@ -423,10 +475,11 @@ price:document.getElementById("part_price").value
 saveParts();
 
 renderParts();
+
 }
 
 /* =========================================
-IPARTS
+IPARTS SEARCH
 ========================================= */
 
 async function searchParts(){
@@ -434,15 +487,41 @@ async function searchParts(){
 const q =
 document.getElementById("search_query").value;
 
-const r =
-await fetch("/parts/search?q=" + encodeURIComponent(q));
-
-const data = await r.json();
+if(!q){
+return;
+}
 
 const container =
 document.getElementById("search_results");
 
+container.innerHTML = `
+<div class="search-card">
+Поиск...
+</div>
+`;
+
+try{
+
+const r =
+await fetch(
+"/parts/search?q=" +
+encodeURIComponent(q)
+);
+
+const data = await r.json();
+
 container.innerHTML = "";
+
+if(!data.length){
+
+container.innerHTML = `
+<div class="search-card">
+Ничего не найдено
+</div>
+`;
+
+return;
+}
 
 data.forEach(p=>{
 
@@ -451,8 +530,40 @@ const div = document.createElement("div");
 div.className = "search-card";
 
 div.innerHTML = `
-<b>${p.name}</b><br>
+
+${
+p.image
+? `
+<img
+src="${p.image}"
+class="parts-image"
+>
+`
+: ""
+}
+
+<div class="parts-title">
+${p.name}
+</div>
+
+<div class="parts-price">
 ${p.price}
+</div>
+
+${
+p.link
+? `
+<a
+href="${p.link}"
+target="_blank"
+class="parts-link"
+>
+Открыть товар
+</a>
+`
+: ""
+}
+
 `;
 
 const btn = document.createElement("button");
@@ -477,6 +588,19 @@ div.appendChild(btn);
 container.appendChild(div);
 
 });
+
+}catch(e){
+
+container.innerHTML = `
+<div class="search-card">
+Ошибка поиска
+</div>
+`;
+
+console.log(e);
+
+}
+
 }
 
 /* =========================================
@@ -509,6 +633,7 @@ return;
 
 document.getElementById("sale_profit").innerText =
 "Profit: " + r.profit;
+
 }
 
 /* =========================================
@@ -524,7 +649,9 @@ const selected =
 let partsSum = 0;
 
 selected.forEach(p=>{
-partsSum += Number(p.price);
+partsSum += Number(
+String(p.price).replace(/[^\d.]/g,"")
+);
 });
 
 const res = await fetch("/report",{
@@ -550,6 +677,7 @@ return;
 }
 
 alert("Сохранено");
+
 }
 
 /* =========================================
@@ -561,6 +689,7 @@ function logout(){
 localStorage.removeItem(storageKey());
 
 loadProfile();
+
 }
 
 async function register(){
@@ -596,6 +725,7 @@ JSON.stringify(data)
 );
 
 loadProfile();
+
 }
 
 async function login(){
@@ -631,6 +761,7 @@ JSON.stringify(data)
 );
 
 loadProfile();
+
 }
 
 /* =========================================
@@ -642,8 +773,15 @@ async function uploadAvatar(event){
 const file = event.target.files[0];
 
 if(!file){
-alert("Файл не выбран");
 return;
+}
+
+if(file.size > 5 * 1024 * 1024){
+
+alert("Файл слишком большой");
+
+return;
+
 }
 
 const reader = new FileReader();
@@ -652,14 +790,10 @@ reader.onload = function(e){
 
 try{
 
-const base64 = e.target.result;
-
 localStorage.setItem(
 avatarKey(),
-base64
+e.target.result
 );
-
-alert("Аватарка обновлена");
 
 loadProfile();
 
@@ -672,6 +806,7 @@ alert("Ошибка загрузки");
 };
 
 reader.readAsDataURL(file);
+
 }
 
 /* =========================================
@@ -724,6 +859,7 @@ document.getElementById("analytics").innerHTML = `
 
 ${history}
 `;
+
 }
 
 async function clearAnalytics(){
@@ -733,6 +869,7 @@ method:"POST"
 });
 
 loadAnalytics();
+
 }
 
 /* =========================================
@@ -751,6 +888,7 @@ document.getElementById("admin").innerHTML =
 "<h3>Нет доступа</h3>";
 
 return;
+
 }
 
 const r = await fetch("/users");
@@ -791,6 +929,7 @@ onclick="deleteUser('${u.username}')"
 });
 
 document.getElementById("admin").innerHTML = html;
+
 }
 
 async function blockUser(username){
@@ -804,6 +943,7 @@ body:JSON.stringify({username})
 });
 
 loadAdmin();
+
 }
 
 async function unblockUser(username){
@@ -817,6 +957,7 @@ body:JSON.stringify({username})
 });
 
 loadAdmin();
+
 }
 
 async function deleteUser(username){
@@ -830,6 +971,7 @@ body:JSON.stringify({username})
 });
 
 loadAdmin();
+
 }
 
 /* =========================================
@@ -872,6 +1014,7 @@ class="del"
 `;
 
 return;
+
 }
 
 document.getElementById("profile").innerHTML = `
@@ -886,7 +1029,7 @@ class="avatar"
 <div class="profile-info">
 
 <div class="profile-name">
-${tgData.first_name || "User"}
+${tgData.first_name || user.username}
 </div>
 
 <div class="profile-sub">
@@ -983,7 +1126,9 @@ placeholder="Пароль"
 </button>
 
 `;
+
 }
+
 }
 
 /* =========================================
