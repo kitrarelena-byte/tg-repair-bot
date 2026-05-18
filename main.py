@@ -6,6 +6,7 @@ import logging
 import os
 import random
 import re
+import pandas as pd
 
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -623,7 +624,274 @@ async def health():
     return {"status": "ok"}
 
 # =========================================
-# IPARTS SEARCH
+# iLCD GOOGLE SHEETS
+# =========================================
+
+ILCD_CSV = "https://docs.google.com/spreadsheets/d/15C4gPRMuKMjIj8tET9AaLgNcHb_6rTRxI4ba4mK5sH8/export?format=csv"
+
+async def search_ilcd(query: str):
+
+    results = []
+
+    try:
+
+        df = pd.read_csv(ILCD_CSV)
+
+        q = query.lower()
+
+        for _, row in df.iterrows():
+
+            row_text = " ".join(
+                [str(x) for x in row.values]
+            ).lower()
+
+            if q in row_text:
+
+                name = ""
+
+                price = ""
+
+                stock = ""
+
+                values = [str(x) for x in row.values]
+
+                if len(values) >= 1:
+                    name = values[0]
+
+                if len(values) >= 2:
+                    price = values[1]
+
+                if len(values) >= 3:
+                    stock = values[2]
+
+                results.append({
+                    "name": name,
+                    "price": str(price),
+                    "stock": stock,
+                    "source": "iLCD",
+                    "image": "",
+                    "link": "https://docs.google.com/spreadsheets/d/15C4gPRMuKMjIj8tET9AaLgNcHb_6rTRxI4ba4mK5sH8"
+                })
+
+            if len(results) >= 20:
+                break
+
+    except Exception as e:
+
+        logger.exception(e)
+
+    return results
+
+# =========================================
+# TOPSET
+# =========================================
+
+async def search_topset(query: str):
+
+    results = []
+
+    try:
+
+        url = (
+            "https://shop.topset.by/search/"
+            "?text=" + query
+        )
+
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS)
+        }
+
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=20
+        )
+
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        cards = soup.find_all("div")
+
+        used = set()
+
+        for c in cards:
+
+            text = c.get_text(
+                " ",
+                strip=True
+            )
+
+            if not text:
+                continue
+
+            if len(text) < 15:
+                continue
+
+            if len(text) > 300:
+                continue
+
+            if query.lower() not in text.lower():
+                continue
+
+            if text in used:
+                continue
+
+            used.add(text)
+
+            price = normalize_price(text)
+
+            img = ""
+
+            image = c.find("img")
+
+            if image and image.get("src"):
+
+                src = image.get("src")
+
+                if src.startswith("/"):
+                    img = "https://shop.topset.by" + src
+                else:
+                    img = src
+
+            link = ""
+
+            a = c.find("a")
+
+            if a and a.get("href"):
+
+                href = a.get("href")
+
+                if href.startswith("/"):
+                    link = "https://shop.topset.by" + href
+                else:
+                    link = href
+
+            results.append({
+                "name": text[:180],
+                "price": price,
+                "stock": "Уточнять",
+                "source": "Topset",
+                "image": img,
+                "link": link
+            })
+
+            if len(results) >= 15:
+                break
+
+    except Exception as e:
+
+        logger.exception(e)
+
+    return results
+
+# =========================================
+# GSMPARTS
+# =========================================
+
+async def search_gsmparts(query: str):
+
+    results = []
+
+    try:
+
+        url = (
+            "https://gsmparts.by/search/"
+            "?q=" + query
+        )
+
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS)
+        }
+
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=20
+        )
+
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        cards = soup.find_all("div")
+
+        used = set()
+
+        for c in cards:
+
+            text = c.get_text(
+                " ",
+                strip=True
+            )
+
+            if not text:
+                continue
+
+            if len(text) < 15:
+                continue
+
+            if len(text) > 350:
+                continue
+
+            if query.lower() not in text.lower():
+                continue
+
+            if text in used:
+                continue
+
+            used.add(text)
+
+            price = normalize_price(text)
+
+            img = ""
+
+            image = c.find("img")
+
+            if image and image.get("src"):
+
+                src = image.get("src")
+
+                if src.startswith("/"):
+                    img = "https://gsmparts.by" + src
+                else:
+                    img = src
+
+            link = ""
+
+            a = c.find("a")
+
+            if a and a.get("href"):
+
+                href = a.get("href")
+
+                if href.startswith("/"):
+                    link = "https://gsmparts.by" + href
+                else:
+                    link = href
+
+            results.append({
+                "name": text[:180],
+                "price": price,
+                "stock": "Уточнять",
+                "source": "GSM Parts",
+                "image": img,
+                "link": link
+            })
+
+            if len(results) >= 15:
+                break
+
+    except Exception as e:
+
+        logger.exception(e)
+
+    return results
+
+# =========================================
+# MAIN SEARCH
 # =========================================
 
 @app.get("/parts/search")
@@ -641,150 +909,51 @@ async def search_parts(q: str):
 
     try:
 
-        session = requests.Session()
+        ilcd = await search_ilcd(q)
 
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml",
-            "Accept-Language": "ru-RU,ru;q=0.9",
-            "Referer": "https://iparts.by/",
-            "Connection": "keep-alive"
-        }
+        topset = await search_topset(q)
 
-        url = f"https://iparts.by/search/?q={q}"
+        gsmparts = await search_gsmparts(q)
 
-        response = session.get(
-            url,
-            headers=headers,
-            timeout=20
+        results = (
+            ilcd +
+            topset +
+            gsmparts
         )
-
-        html = response.text
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        items = []
-
-        # =====================================
-        # ИЩЕМ ВСЕ ТЕКСТЫ С ЦЕНОЙ
-        # =====================================
-
-        texts = soup.find_all(text=True)
-
-        used = set()
-
-        for t in texts:
-
-            text = str(t).strip()
-
-            if not text:
-                continue
-
-            # ищем цены
-            if (
-                "BYN" in text
-                or "руб." in text
-                or "р." in text
-            ):
-
-                parent = t.parent
-
-                if not parent:
-                    continue
-
-                block_text = parent.get_text(
-                    " ",
-                    strip=True
-                )
-
-                block_text = " ".join(block_text.split())
-
-                if len(block_text) < 15:
-                    continue
-
-                if len(block_text) > 300:
-                    continue
-
-                if block_text in used:
-                    continue
-
-                used.add(block_text)
-
-                # =================================
-                # ПЫТАЕМСЯ ВЫТАЩИТЬ ЦЕНУ
-                # =================================
-
-                price = "—"
-
-                words = block_text.split()
-
-                for w in words:
-
-                    if (
-                        "BYN" in w
-                        or "руб" in w
-                    ):
-                        price = w
-
-                # =================================
-                # НАЗВАНИЕ
-                # =================================
-
-                name = block_text[:180]
-
-                items.append({
-                    "name": name,
-                    "price": price
-                })
-
-            if len(items) >= 15:
-                break
-
-        # =====================================
-        # ОЧИСТКА ДУБЛЕЙ
-        # =====================================
 
         clean = []
 
-        names = set()
+        used = set()
 
-        for item in items:
+        for item in results:
 
-            key = item["name"][:50]
+            key = (
+                item["name"][:80].lower()
+            )
 
-            if key in names:
+            if key in used:
                 continue
 
-            names.add(key)
+            used.add(key)
 
             clean.append(item)
 
-        # =====================================
-        # УСПЕХ
-        # =====================================
+        CACHE[cache_key] = clean
 
-        if clean:
-
-            CACHE[cache_key] = clean
-
-            return clean
+        return clean
 
     except Exception as e:
 
         logger.exception(e)
 
-    # =========================================
-    # FALLBACK
-    # =========================================
-
     return [
         {
             "name": f"{q} (ничего не найдено)",
-            "price": "—"
+            "price": "—",
+            "stock": "—",
+            "source": "CRM",
+            "image": "",
+            "link": ""
         }
     ]
 

@@ -547,7 +547,24 @@ ${p.name}
 </div>
 
 <div class="parts-price">
-${p.price}
+💰 ${p.price}
+</div>
+
+<div style="
+margin-bottom:8px;
+font-size:14px;
+opacity:.9;
+">
+📦 Наличие: ${p.stock || "Уточнять"}
+</div>
+
+<div style="
+margin-bottom:12px;
+font-size:13px;
+color:#60a5fa;
+font-weight:bold;
+">
+Источник: ${p.source || "Unknown"}
 </div>
 
 ${
