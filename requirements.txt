@@ -13,3 +13,5 @@ passlib[bcrypt]
 bcrypt
 Werkzeug
 aiohttp
+pandas
+python-multipart
