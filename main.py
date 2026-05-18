@@ -891,7 +891,7 @@ async def search_gsmparts(query: str):
     return results
 
 # =========================================
-# MAIN SEARCH
+# MULTI SEARCH
 # =========================================
 
 @app.get("/parts/search")
@@ -907,55 +907,226 @@ async def search_parts(q: str):
     if cache_key in CACHE:
         return CACHE[cache_key]
 
+    results = []
+
+    headers = {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Accept-Language": "ru-RU,ru;q=0.9"
+    }
+
+    # =====================================
+    # iLCD
+    # =====================================
+
     try:
 
-        ilcd = await search_ilcd(q)
-
-        topset = await search_topset(q)
-
-        gsmparts = await search_gsmparts(q)
-
-        results = (
-            ilcd +
-            topset +
-            gsmparts
+        csv_url = (
+            "https://docs.google.com/spreadsheets/d/"
+            "15C4gPRMuKMjIj8tET9AaLgNcHb_6rTRxI4ba4mK5sH8/"
+            "export?format=csv"
         )
 
-        clean = []
+        r = requests.get(
+            csv_url,
+            headers=headers,
+            timeout=20
+        )
+
+        rows = r.text.splitlines()
+
+        for row in rows:
+
+            if q.lower() not in row.lower():
+                continue
+
+            cols = row.split(",")
+
+            name = cols[0] if len(cols) > 0 else q
+            price = cols[1] if len(cols) > 1 else "—"
+            stock = cols[2] if len(cols) > 2 else "Есть"
+
+            results.append({
+                "name": name[:180],
+                "price": price,
+                "stock": stock,
+                "source": "iLCD",
+                "image": "",
+                "link": "https://docs.google.com"
+            })
+
+            if len(results) >= 10:
+                break
+
+    except Exception as e:
+        logger.exception(e)
+
+    # =====================================
+    # GSMPARTS
+    # =====================================
+
+    try:
+
+        gsm_url = (
+            "https://gsmparts.by/search/"
+            f"?search={q}"
+        )
+
+        r = requests.get(
+            gsm_url,
+            headers=headers,
+            timeout=20
+        )
+
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        cards = soup.find_all("div")
 
         used = set()
 
-        for item in results:
+        for card in cards:
 
-            key = (
-                item["name"][:80].lower()
+            text = card.get_text(
+                " ",
+                strip=True
             )
 
-            if key in used:
+            if not text:
                 continue
 
-            used.add(key)
+            if len(text) < 20:
+                continue
 
-            clean.append(item)
+            if len(text) > 500:
+                continue
 
-        CACHE[cache_key] = clean
+            low = text.lower()
 
-        return clean
+            if q.lower() not in low:
+                continue
+
+            if text in used:
+                continue
+
+            used.add(text)
+
+            price = "—"
+
+            m = re.search(
+                r"([0-9]+[.,]?[0-9]*)",
+                text
+            )
+
+            if m:
+                price = m.group(1) + " BYN"
+
+            results.append({
+                "name": text[:180],
+                "price": price,
+                "stock": "Уточнять",
+                "source": "GSM Parts",
+                "image": "",
+                "link": gsm_url
+            })
+
+            if len(results) >= 20:
+                break
 
     except Exception as e:
-
         logger.exception(e)
 
-    return [
-        {
-            "name": f"{q} (ничего не найдено)",
-            "price": "—",
-            "stock": "—",
-            "source": "CRM",
-            "image": "",
-            "link": ""
-        }
-    ]
+    # =====================================
+    # TOPSET
+    # =====================================
+
+    try:
+
+        topset_url = (
+            "https://shop.topset.by/search/"
+            f"?q={q}"
+        )
+
+        r = requests.get(
+            topset_url,
+            headers=headers,
+            timeout=20
+        )
+
+        soup = BeautifulSoup(
+            r.text,
+            "html.parser"
+        )
+
+        text = soup.get_text(
+            " ",
+            strip=True
+        )
+
+        blocks = text.split("BYN")
+
+        for block in blocks:
+
+            if q.lower() not in block.lower():
+                continue
+
+            if len(block) < 20:
+                continue
+
+            if len(block) > 250:
+                continue
+
+            price_match = re.search(
+                r"([0-9]+[.,]?[0-9]*)",
+                block
+            )
+
+            price = (
+                price_match.group(1) + " BYN"
+                if price_match
+                else "—"
+            )
+
+            results.append({
+                "name": block[:180],
+                "price": price,
+                "stock": "Есть",
+                "source": "Topset",
+                "image": "",
+                "link": topset_url
+            })
+
+            if len(results) >= 30:
+                break
+
+    except Exception as e:
+        logger.exception(e)
+
+    # =====================================
+    # CLEAN DUPLICATES
+    # =====================================
+
+    clean = []
+
+    used = set()
+
+    for item in results:
+
+        key = (
+            item["name"][:80].lower()
+        )
+
+        if key in used:
+            continue
+
+        used.add(key)
+
+        clean.append(item)
+
+    CACHE[cache_key] = clean
+
+    return clean
 
 # =========================================
 # RUN
